@@ -2,7 +2,7 @@
 import { Link } from "@inertiajs/react";
 
 // import icons dari lucide react
-import { BookOpen, User, Settings, LogOut } from "lucide-react";
+import { BookOpen, FileSearch, User, Settings, LogOut } from "lucide-react";
 
 export default function UserDropdown({ auth, activeDropdown, toggleDropdown }) {
 
@@ -17,6 +17,12 @@ export default function UserDropdown({ auth, activeDropdown, toggleDropdown }) {
             name: "Dokumentasi",
             href: "/admin/dokumentasi",
             icon: BookOpen
+        },
+        {
+            name: "Log Viewer",
+            href: "/log-viewer",
+            icon: FileSearch,
+            external: true
         },
         { 
             name: "Sign out", 
@@ -59,21 +65,38 @@ export default function UserDropdown({ auth, activeDropdown, toggleDropdown }) {
                                 </p>
                             </div>
                             <div className="py-1">
-                                {userNavigation.map((item) => (
-                                    <Link
-                                        key={item.name}
-                                        href={item.href}
-                                        method={item.method || "get"}
-                                        as="button"
-                                        onClick={() => toggleDropdown(null)}
-                                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150 group"
-                                    >
-                                        <item.icon className="w-4 h-4 mr-3 text-gray-400 group-hover:text-blue-600" />
-                                        <span className="font-medium">
-                                            {item.name}
-                                        </span>
-                                    </Link>
-                                ))}
+                                {userNavigation.map((item) => {
+                                    const content = (
+                                        <>
+                                            <item.icon className="w-4 h-4 mr-3 text-gray-400 group-hover:text-blue-600" />
+                                            <span className="font-medium">
+                                                {item.name}
+                                            </span>
+                                        </>
+                                    );
+
+                                    return item.external ? (
+                                        <a
+                                            key={item.name}
+                                            href={item.href}
+                                            onClick={() => toggleDropdown(null)}
+                                            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150 group"
+                                        >
+                                            {content}
+                                        </a>
+                                    ) : (
+                                        <Link
+                                            key={item.name}
+                                            href={item.href}
+                                            method={item.method || "get"}
+                                            as="button"
+                                            onClick={() => toggleDropdown(null)}
+                                            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-150 group"
+                                        >
+                                            {content}
+                                        </Link>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}

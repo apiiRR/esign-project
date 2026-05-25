@@ -1,5 +1,8 @@
 import { createInertiaApp } from '@inertiajs/react'
 import { createRoot } from 'react-dom/client'
+import { registerSW } from 'virtual:pwa-register'
+
+registerSW({ immediate: true })
 
 createInertiaApp({
     resolve: name => {

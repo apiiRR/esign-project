@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import LayoutPegawai from "@/Layouts/LayoutPegawai";
 import NotaDinasPreview from "@/Pages/Admin/LetterTemplates/Components/NotaDinasPreview";
 import Search from "@/Shared/Search";
+import FormErrorSummary from "@/Shared/FormErrorSummary";
 import {
     Archive,
+    Bell,
     CheckCheck,
     Clock,
     Download,
@@ -18,6 +20,8 @@ import {
     Trash2,
     Upload,
 } from "lucide-react";
+
+const MAX_PDF_SIZE = 10 * 1024 * 1024;
 
 function Header({ title, description, actionHref, actionText }) {
     return (
@@ -76,6 +80,33 @@ function collection(value) {
           : [];
 }
 
+function letterDisplayNumber(letter) {
+    if (!letter) return "-";
+    if (letter.type === "incoming_external") return letter.letter_number || "-";
+    return letter.letter_number || letter.reference || "-";
+}
+
+function letterTypeMeta(letterOrType) {
+    const type =
+        typeof letterOrType === "string"
+            ? letterOrType
+            : letterOrType?.meta?.mode === "archive"
+              ? "archive"
+              : letterOrType?.type;
+    const types = {
+        incoming_external: { label: "Surat Masuk Eksternal", tone: "amber" },
+        internal: { label: "Surat Internal", tone: "blue" },
+        outgoing: { label: "Surat Keluar", tone: "green" },
+        archive: { label: "Arsip", tone: "gray" },
+    };
+
+    return types[type] || { label: "Surat", tone: "gray" };
+}
+
+function businessLetterType(letter) {
+    return letter?.meta?.mode === "archive" ? "archive" : letter?.type;
+}
+
 function Dashboard() {
     const { stats = {}, letters = [] } = usePage().props;
     const cards = [
@@ -94,8 +125,8 @@ function Dashboard() {
             tone: "blue",
         },
         {
-            label: "Disposisi Open",
-            value: stats.open_dispositions || 0,
+            label: "Disposisi Belum Dibaca",
+            value: stats.unread_dispositions || 0,
             icon: Inbox,
             href: "/pegawai/disposisi",
             tone: "amber",
@@ -186,9 +217,12 @@ function LetterList({ letters, emptyText = "Tidak ada data surat." }) {
                                         >
                                             {letter.subject || letter.title}
                                         </Link>
+                                        <Pill tone={letterTypeMeta(letter).tone}>
+                                            {letterTypeMeta(letter).label}
+                                        </Pill>
                                     </div>
                                     <div className="mt-1 text-xs text-gray-500">
-                                        {letter.reference} ·{" "}
+                                        {letterDisplayNumber(letter)} ·{" "}
                                         {formatDate(letter.created_at)} ·{" "}
                                         {letter.page_count || 1} halaman
                                     </div>
@@ -244,7 +278,7 @@ function DispositionList({ dispositions }) {
                                         "Surat"}
                                 </Link>
                                 <div className="mt-1 text-xs text-gray-500">
-                                    {disposition.letter?.reference || "-"} ·{" "}
+                                    {letterDisplayNumber(disposition.letter)} ·{" "}
                                     {formatDate(disposition.created_at)}
                                 </div>
                             </div>
@@ -252,16 +286,8 @@ function DispositionList({ dispositions }) {
                                 {disposition.from_user?.name || "-"}
                             </div>
                             <div className="md:col-span-2">
-                                <Pill
-                                    tone={
-                                        disposition.status === "open"
-                                            ? "amber"
-                                            : "green"
-                                    }
-                                >
-                                    {disposition.status === "open"
-                                        ? "Open"
-                                        : "Selesai"}
+                                <Pill tone={disposition.read_at ? "green" : "gray"}>
+                                    {disposition.read_at ? "Dibaca" : "Belum dibaca"}
                                 </Pill>
                             </div>
                             <div className="md:col-span-2 text-gray-600">
@@ -298,7 +324,6 @@ function InboxPage({ mode }) {
                 <Search
                     URL={mode === "tebusan" ? "/pegawai/inbox/tebusan" : mode === "disposisi" ? "/pegawai/disposisi" : "/pegawai/inbox/internal"}
                     filters={mode === "disposisi" ? [
-                        { key: "statuses", label: "Status", options: filterOptions.dispositionStatuses || [] },
                         { key: "from_user_ids", label: "Pengirim", options: filterOptions.users || [] },
                     ] : [
                         { key: "letter_type_ids", label: "Jenis Surat", options: filterOptions.letterTypes || [] },
@@ -385,6 +410,7 @@ function CreateMenuPage() {
 }
 
 function CreatePage() {
+    const pageProps = usePage().props;
     const {
         templates = [],
         letterTypes = [],
@@ -392,7 +418,8 @@ function CreatePage() {
         auth,
         mode = "internal",
         settings = {},
-    } = usePage().props;
+        errors: serverErrors = {},
+    } = pageProps;
     const isInternal = mode === "internal";
     const isOutgoing = mode === "outgoing";
     const supportsDraftSend = isInternal || isOutgoing;
@@ -435,23 +462,24 @@ function CreatePage() {
     };
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
     const [recipientDraft, setRecipientDraft] = useState({
-        target_type: "user",
+        target_type: "department",
         target_id: "",
     });
     const [ccDraft, setCcDraft] = useState({
-        target_type: "user",
+        target_type: "department",
         target_id: "",
     });
     const [pageCount, setPageCount] = useState(1);
     const [letterNumberTouched, setLetterNumberTouched] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [clientErrors, setClientErrors] = useState([]);
     const letterDate = new Date().toLocaleDateString("id-ID", {
         day: "2-digit",
         month: "long",
         year: "numeric",
     });
     const originOptions = internalOriginOptions(auth?.user);
-    const defaultOrigin = originOptions[0] || { type: "", id: "", name: "" };
+    const defaultOrigin = originOptions[0] || { type: "", rawId: "", id: "", name: "" };
 
     const { data, setData, post, processing, errors, reset } = useForm({
         creation_method: "scan",
@@ -472,12 +500,13 @@ function CreatePage() {
             letter_date: letterDate,
             origin_name: "",
             internal_origin_type: defaultOrigin.type,
-            internal_origin_id: defaultOrigin.id,
+            internal_origin_id: defaultOrigin.rawId,
             internal_origin_name: defaultOrigin.name,
             external_recipient: "",
             notes: "",
         },
     });
+    const formErrors = { ...serverErrors, ...errors };
 
     const compatibleTemplates = templates.filter((template) =>
         isOutgoing
@@ -539,6 +568,7 @@ function CreatePage() {
         (letterType) => String(letterType.id) === String(data.letter_type_id),
     );
     const numberingActive = Boolean(
+        mode !== "incoming_external" &&
         selectedLetterType?.numbering_enabled &&
             (selectedLetterType.numbering_contexts || []).includes(mode),
     );
@@ -623,17 +653,54 @@ function CreatePage() {
     }
 
     function handleFile(file) {
-        setData("scan_file", file || null);
         if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-        setPdfPreviewUrl(file ? URL.createObjectURL(file) : "");
+        setClientErrors([]);
+
+        if (!file) {
+            setData("scan_file", null);
+            setPdfPreviewUrl("");
+            return;
+        }
+
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        if (!isPdf) {
+            const message = "File Scan harus berupa PDF.";
+            setData("scan_file", null);
+            setPdfPreviewUrl("");
+            setClientErrors([message]);
+            window.alert(message);
+            return;
+        }
+
+        if (file.size > MAX_PDF_SIZE) {
+            const message = "Ukuran File Scan PDF maksimal 10MB. Pilih file yang lebih kecil atau kompres PDF terlebih dahulu.";
+            setData("scan_file", null);
+            setPdfPreviewUrl("");
+            setClientErrors([message]);
+            window.alert(message);
+            return;
+        }
+
+        setData("scan_file", file);
+        setPdfPreviewUrl(URL.createObjectURL(file));
     }
 
     function submit(e, action = "send") {
         e.preventDefault();
+        if (clientErrors.length) {
+            window.alert(clientErrors[0]);
+            return;
+        }
         setSubmitting(true);
         router.post(pageConfig.submitUrl, { ...data, submit_action: action }, {
             forceFormData: true,
             preserveScroll: true,
+            onError: (validationErrors) => {
+                const messages = Object.values(validationErrors || {}).flat().filter(Boolean);
+                const message = messages[0] || "Form gagal disimpan. Periksa kembali input yang wajib diisi.";
+                setClientErrors(messages);
+                window.alert(message);
+            },
             onSuccess: () => {
                 reset();
                 if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
@@ -663,6 +730,9 @@ function CreatePage() {
                 title={pageConfig.title}
                 description={pageConfig.description}
             />
+            <div className="mb-5">
+                <FormErrorSummary errors={formErrors} extraErrors={clientErrors} />
+            </div>
             <form onSubmit={submit} className="grid gap-6 xl:grid-cols-12">
                 <div className="space-y-5 xl:col-span-6">
                     <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -713,7 +783,7 @@ function CreatePage() {
                                 id: letterType.id,
                                 name: `${letterType.name}${letterType.code ? ` (${letterType.code})` : ""}`,
                             }))}
-                            error={errors.letter_type_id}
+                            error={formErrors.letter_type_id}
                         />
                         <Field
                             label="Nomor Surat"
@@ -722,8 +792,8 @@ function CreatePage() {
                                 setLetterNumberTouched(true);
                                 setData("letter_number", value);
                             }}
-                            error={errors.letter_number}
-                            placeholder={numberingActive ? "Nomor otomatis akan diisi saat jenis dan asal surat dipilih" : "Opsional, jika sudah ada nomor"}
+                            error={formErrors.letter_number}
+                            placeholder={mode === "incoming_external" ? "Masukkan nomor surat dari dokumen eksternal" : numberingActive ? "Nomor otomatis akan diisi saat jenis dan asal surat dipilih" : "Opsional, jika sudah ada nomor"}
                         />
                         {numberingActive ? (
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-800">
@@ -734,13 +804,17 @@ function CreatePage() {
                             label="Perihal"
                             value={data.subject}
                             onChange={(value) => setData("subject", value)}
-                            error={errors.subject}
+                            error={formErrors.subject}
                             placeholder="Perihal surat"
                         />
                         {isInternal || isOutgoing ? (
                             <SelectField
                                 label="Asal Surat"
-                                value={`${data.payload.internal_origin_type}:${data.payload.internal_origin_id}`}
+                                value={
+                                    data.payload.internal_origin_type && data.payload.internal_origin_id
+                                        ? `${data.payload.internal_origin_type}:${data.payload.internal_origin_id}`
+                                        : ""
+                                }
                                 onChange={(value) => {
                                     const selected = originOptions.find(
                                         (option) => option.id === value,
@@ -749,14 +823,14 @@ function CreatePage() {
                                     setData("payload", {
                                         ...data.payload,
                                         internal_origin_type: selected.type,
-                                        internal_origin_id: selected.rawId,
+                                        internal_origin_id: Number(selected.rawId),
                                         internal_origin_name: selected.name,
                                     });
                                 }}
                                 options={originOptions}
                                 error={
-                                    errors["payload.internal_origin_type"] ||
-                                    errors["payload.internal_origin_id"]
+                                    formErrors["payload.internal_origin_type"] ||
+                                    formErrors["payload.internal_origin_id"]
                                 }
                                 noPlaceholder
                             />
@@ -768,7 +842,7 @@ function CreatePage() {
                                 onChange={(value) =>
                                     updatePayload("external_recipient", value)
                                 }
-                                error={errors["payload.external_recipient"]}
+                                error={formErrors["payload.external_recipient"]}
                                 placeholder="Nama perusahaan/instansi penerima"
                             />
                         ) : null}
@@ -779,7 +853,7 @@ function CreatePage() {
                                 onChange={(value) =>
                                     updatePayload("origin_name", value)
                                 }
-                                error={errors["payload.origin_name"]}
+                                error={formErrors["payload.origin_name"]}
                                 placeholder="Nama instansi/perusahaan pengirim"
                             />
                         ) : null}
@@ -791,25 +865,27 @@ function CreatePage() {
                                     updatePayload("notes", value)
                                 }
                                 rows={4}
-                                error={errors["payload.notes"]}
+                                error={formErrors["payload.notes"]}
                                 placeholder="Catatan tambahan"
                             />
                         ) : null}
                     </div>
 
-                    {isInternal ? (
+                    {isInternal || isOutgoing ? (
                         <>
-                            <TargetPicker
-                                title="Tujuan"
-                                draft={recipientDraft}
-                                setDraft={setRecipientDraft}
-                                targets={data.targets}
-                                field="targets"
-                                targetOptions={targetOptions}
-                                onAdd={() => addTarget("recipient")}
-                                onRemove={removeTarget}
-                                error={errors.targets}
-                            />
+                            {isInternal ? (
+                                <TargetPicker
+                                    title="Tujuan"
+                                    draft={recipientDraft}
+                                    setDraft={setRecipientDraft}
+                                    targets={data.targets}
+                                    field="targets"
+                                    targetOptions={targetOptions}
+                                    onAdd={() => addTarget("recipient")}
+                                    onRemove={removeTarget}
+                                    error={formErrors.targets}
+                                />
+                            ) : null}
 
                             <TargetPicker
                                 title="Tembusan"
@@ -850,9 +926,9 @@ function CreatePage() {
                                     </div>
                                 </div>
                             </div>
-                            {errors.scan_file ? (
+                            {formErrors.scan_file ? (
                                 <div className="mt-2 text-xs text-red-600">
-                                    {errors.scan_file}
+                                    {formErrors.scan_file}
                                 </div>
                             ) : null}
                         </div>
@@ -872,7 +948,7 @@ function CreatePage() {
                                     id: template.id,
                                     name: template.name,
                                 }))}
-                                error={errors.letter_template_id}
+                                error={formErrors.letter_template_id}
                                 noPlaceholder
                             />
                             <TextareaField
@@ -915,7 +991,7 @@ function CreatePage() {
                                     setData("body_rendered", value)
                                 }
                                 rows={8}
-                                error={errors.body_rendered}
+                                error={formErrors.body_rendered}
                             />
                         </div>
                     )}
@@ -972,10 +1048,10 @@ function CreatePage() {
                                 <iframe
                                     title="Preview PDF"
                                     src={pdfPreviewUrl}
-                                    className="h-[720px] w-full bg-gray-100"
+                                    className="h-[520px] md:h-[720px] w-full bg-gray-100"
                                 />
                             ) : (
-                                <div className="flex h-[720px] items-center justify-center bg-gray-50 text-sm text-gray-500">
+                                <div className="flex h-[520px] md:h-[720px] items-center justify-center bg-gray-50 text-sm text-gray-500">
                                     Pilih file PDF untuk melihat preview.
                                 </div>
                             )
@@ -988,7 +1064,7 @@ function CreatePage() {
                                     if (data.page_count !== count)
                                         setData("page_count", count);
                                 }}
-                                className="h-[720px]"
+                                className="h-[520px] md:h-[720px]"
                             />
                         )}
                     </div>
@@ -1001,9 +1077,9 @@ function CreatePage() {
 function DetailPage() {
     const {
         letter,
-        audits = [],
         notifications = [],
         targetOptions = {},
+        dispositionTargetOptions = {},
         auth,
     } = usePage().props;
     if (!letter) {
@@ -1024,15 +1100,27 @@ function DetailPage() {
         subject: letter.subject,
         page_count: letter.page_count,
     };
+    const businessType = businessLetterType(letter);
+    const isIncomingExternal = businessType === "incoming_external";
+    const isOutgoingLetter = businessType === "outgoing";
+    const typeMeta = letterTypeMeta(letter);
+    const dispositionTypes = availableDispositionTypes(dispositionTargetOptions);
+    const dispositionTree = buildDispositionTree(letter.dispositions || []);
+    const readStatuses = letter.target_read_statuses?.length
+        ? letter.target_read_statuses
+        : (letter.read_receipts || []);
     const canDeleteDraft =
         letter.status === "draft" &&
+        String(letter.created_by) === String(auth?.user?.id);
+    const canPublish =
+        ["incoming_external", "outgoing", "archive"].includes(businessType) &&
         String(letter.created_by) === String(auth?.user?.id);
 
     return (
         <>
             <Header
                 title={letter.subject || letter.title}
-                description={`${letter.reference} · ${formatDate(letter.created_at)}`}
+                description={`${letterDisplayNumber(letter)} · ${formatDate(letter.created_at)}`}
             />
             {canDeleteDraft ? (
                 <div className="mb-5 flex justify-end">
@@ -1053,6 +1141,9 @@ function DetailPage() {
             <div className="grid gap-6 xl:grid-cols-12">
                 <div className="space-y-5 xl:col-span-7">
                     <Panel title="Metadata Surat">
+                        <div className="mb-4">
+                            <Pill tone={typeMeta.tone}>{typeMeta.label}</Pill>
+                        </div>
                         <InfoGrid
                             rows={[
                                 ["Nomor", letter.letter_number || "-"],
@@ -1071,7 +1162,7 @@ function DetailPage() {
                                     "Jumlah Halaman",
                                     `${letter.page_count || 1} Halaman`,
                                 ],
-                                ["Status", letter.status],
+                                ...(!isIncomingExternal && !isOutgoingLetter ? [["Status", letter.status]] : []),
                                 ["Dibuat", formatDate(letter.created_at)],
                                 ...(letter.payload?.internal_origin_name
                                     ? [
@@ -1105,7 +1196,7 @@ function DetailPage() {
                         />
                     </Panel>
 
-                    <Panel title="Target dan Tembusan">
+                    {businessType === "internal" ? <Panel title="Target dan Tembusan">
                         <TargetSummary
                             title="Tujuan"
                             targets={recipientTargets}
@@ -1118,7 +1209,22 @@ function DetailPage() {
                                 targetOptions={targetOptions}
                             />
                         </div>
-                    </Panel>
+                    </Panel> : null}
+
+                    {isOutgoingLetter ? <Panel title="Tembusan">
+                        <TargetSummary
+                            title="Tembusan"
+                            targets={ccTargets}
+                            targetOptions={targetOptions}
+                        />
+                    </Panel> : null}
+
+                    {canPublish ? (
+                        <PublishExternalPanel
+                            letter={letter}
+                            targetOptions={targetOptions}
+                        />
+                    ) : null}
 
                     <Panel title="Lampiran">
                         {letter.attachments?.length ? (
@@ -1147,36 +1253,17 @@ function DetailPage() {
                     </Panel>
 
                     <Panel title="Disposisi">
-                        {letter.dispositions?.length ? (
+                        {dispositionTree.length ? (
                             <div className="space-y-3">
-                                {letter.dispositions.map((disposition) => (
-                                    <div
+                                {dispositionTree.map((disposition) => (
+                                    <DispositionThreadItem
                                         key={disposition.id}
-                                        className="rounded-lg border border-gray-200 px-4 py-3 text-sm"
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="font-semibold text-gray-950">
-                                                {disposition.from_user?.name ||
-                                                    "-"}
-                                            </div>
-                                            <Pill
-                                                tone={
-                                                    disposition.status ===
-                                                    "open"
-                                                        ? "amber"
-                                                        : "green"
-                                                }
-                                            >
-                                                {disposition.status}
-                                            </Pill>
-                                        </div>
-                                        <div className="mt-2 text-gray-600">
-                                            {disposition.note || "-"}
-                                        </div>
-                                        <div className="mt-2 text-xs text-gray-500">
-                                            {formatDate(disposition.created_at)}
-                                        </div>
-                                    </div>
+                                        disposition={disposition}
+                                        targetOptions={targetOptions}
+                                        dispositionTargetOptions={dispositionTargetOptions}
+                                        targetTypes={dispositionTypes}
+                                        letterId={letter.id}
+                                    />
                                 ))}
                             </div>
                         ) : (
@@ -1193,13 +1280,13 @@ function DetailPage() {
                             <NotaDinasPreview
                                 html={letter.body_rendered}
                                 metadata={metadata}
-                                className="max-h-[680px]"
+                                className="max-h-[520px] md:max-h-[680px]"
                             />
                         ) : letter.attachments?.[0] ? (
                             <iframe
                                 title="Preview PDF"
                                 src={`/storage/${letter.attachments[0].file_path}`}
-                                className="h-[680px] w-full rounded-lg border border-gray-200 bg-gray-100"
+                                className="h-[520px] md:h-[680px] w-full rounded-lg border border-gray-200 bg-gray-100"
                             />
                         ) : (
                             <div className="text-sm text-gray-500">
@@ -1209,11 +1296,11 @@ function DetailPage() {
                     </Panel>
 
                     <Panel title="Status Baca">
-                        {letter.read_receipts?.length ? (
+                        {readStatuses.length ? (
                             <div className="space-y-3">
-                                {letter.read_receipts.map((receipt) => (
+                                {readStatuses.map((receipt) => (
                                     <div
-                                        key={receipt.id}
+                                        key={receipt.id || receipt.user?.id}
                                         className="flex items-center justify-between gap-3 text-sm"
                                     >
                                         <div>
@@ -1237,18 +1324,7 @@ function DetailPage() {
                         )}
                     </Panel>
 
-                    <Panel title="Aktivitas">
-                        <Timeline
-                            items={audits.map((audit) => ({
-                                id: audit.id,
-                                title: audit.action,
-                                subtitle: audit.user?.name || "Sistem",
-                                time: audit.created_at,
-                            }))}
-                        />
-                    </Panel>
-
-                    <Panel title="Notifikasi">
+                    {!isIncomingExternal ? <Panel title="Notifikasi">
                         <Timeline
                             items={notifications.map((notification) => ({
                                 id: notification.id,
@@ -1260,11 +1336,303 @@ function DetailPage() {
                             }))}
                             empty="Belum ada log notifikasi."
                         />
-                    </Panel>
+                    </Panel> : null}
                 </div>
             </div>
         </>
     );
+}
+
+function PublishExternalPanel({ letter, targetOptions }) {
+    const publishTypes = ["department", "division", "directorate"];
+    const form = useForm({ targets: [] });
+    const [draft, setDraft] = useState({
+        target_type: "department",
+        target_id: "",
+    });
+    const publishedTargets = (letter.targets || []).filter(
+        (target) => target.kind === "recipient",
+    );
+
+    const addTarget = () => {
+        if (!draft.target_type || !draft.target_id) return;
+        const exists = form.data.targets.some(
+            (target) =>
+                target.target_type === draft.target_type &&
+                String(target.target_id) === String(draft.target_id),
+        ) || publishedTargets.some(
+            (target) =>
+                target.target_type === draft.target_type &&
+                String(target.target_id) === String(draft.target_id),
+        );
+
+        if (exists) return;
+
+        form.setData("targets", [
+            ...form.data.targets,
+            {
+                target_type: draft.target_type,
+                target_id: draft.target_id,
+            },
+        ]);
+        setDraft({ ...draft, target_id: "" });
+    };
+
+    const removeDraftTarget = (_field, index) => {
+        form.setData(
+            "targets",
+            form.data.targets.filter((_, targetIndex) => targetIndex !== index),
+        );
+    };
+
+    const submit = (event) => {
+        event.preventDefault();
+        form.post(`/pegawai/surat/${letter.id}/publish`, {
+            preserveScroll: true,
+            onSuccess: () => form.reset("targets"),
+        });
+    };
+
+    const revokeTarget = (target) => {
+        if (!confirm("Cabut publish ke target ini?")) return;
+
+        router.delete(`/pegawai/surat/${letter.id}/publish/${target.id}`, {
+            preserveScroll: true,
+        });
+    };
+
+    return (
+        <Panel title="Publish Surat">
+            <form onSubmit={submit} className="space-y-4">
+                <TargetPicker
+                    title="Tujuan Publish"
+                    draft={draft}
+                    setDraft={setDraft}
+                    targets={form.data.targets}
+                    field="targets"
+                    targetOptions={targetOptions}
+                    targetTypes={publishTypes}
+                    onAdd={addTarget}
+                    onRemove={removeDraftTarget}
+                    error={form.errors.targets}
+                />
+                <button
+                    disabled={form.processing || !form.data.targets.length}
+                    className="inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                    <Send className="mr-2 h-4 w-4" />
+                    Publish
+                </button>
+            </form>
+
+            <div className="mt-5 border-t border-gray-100 pt-4">
+                <div className="mb-3 text-sm font-semibold text-gray-950">
+                    Sudah Dipublish
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    {publishedTargets.length ? (
+                        publishedTargets.map((target) => (
+                            <span
+                                key={target.id}
+                                className="inline-flex max-w-full items-center gap-2 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700"
+                            >
+                                <span className="min-w-0 break-words">
+                                    {targetLabel(target, targetOptions)}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => revokeTarget(target)}
+                                    className="shrink-0 text-gray-400 hover:text-red-600"
+                                    title="Cabut publish"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                            </span>
+                        ))
+                    ) : (
+                        <span className="text-sm text-gray-500">
+                            Belum dipublish ke unit mana pun.
+                        </span>
+                    )}
+                </div>
+            </div>
+        </Panel>
+    );
+}
+
+function DispositionThreadItem({ disposition, targetOptions, dispositionTargetOptions, targetTypes, letterId, depth = 0 }) {
+    const replyForm = useForm({ note: "" });
+    const forwardForm = useForm({
+        parent_id: disposition.id,
+        target_type: targetTypes[0]?.id || "department",
+        target_id: "",
+        note: "",
+    });
+    const submitReply = (event) => {
+        event.preventDefault();
+        replyForm.post(`/pegawai/disposisi/${disposition.id}/balas`, {
+            preserveScroll: true,
+            onSuccess: () => replyForm.reset("note"),
+        });
+    };
+    const submitForward = (event) => {
+        event.preventDefault();
+        forwardForm.post(`/pegawai/surat/${letterId}/disposisi`, {
+            preserveScroll: true,
+            onSuccess: () => forwardForm.reset("target_id", "note"),
+        });
+    };
+
+    return (
+        <div className={`${depth ? "ml-4 border-l border-gray-200 pl-4" : ""}`}>
+            <div className="rounded-lg border border-gray-200 px-4 py-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <div className="font-semibold text-gray-950">
+                            {fromUnitLabel(disposition)}
+                        </div>
+                        <div className="mt-1 text-xs font-medium text-gray-500">
+                            Tujuan: {targetLabel(disposition, targetOptions)}
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Pill tone={disposition.read_at ? "green" : "gray"}>
+                            {disposition.read_at ? "Dibaca" : "Belum dibaca"}
+                        </Pill>
+                    </div>
+                </div>
+                <div className="mt-3 text-gray-700">{disposition.note || "-"}</div>
+                <div className="mt-2 text-xs text-gray-500">{formatDate(disposition.created_at)}</div>
+                {disposition.can_reply ? (
+                    <form onSubmit={submitReply} className="mt-4 space-y-2">
+                        <textarea
+                            rows={2}
+                            value={replyForm.data.note}
+                            onChange={(event) => replyForm.setData("note", event.target.value)}
+                            placeholder="Balas disposisi"
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+                        />
+                        {replyForm.errors.note ? <div className="text-xs text-red-600">{replyForm.errors.note}</div> : null}
+                        <div className="flex flex-wrap gap-2">
+                            <button disabled={replyForm.processing || !replyForm.data.note} className="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                                <Send className="mr-2 h-3.5 w-3.5" />
+                                Balas
+                            </button>
+                        </div>
+                    </form>
+                ) : null}
+                {disposition.can_forward && targetTypes.length ? (
+                    <div className="mt-4 border-t border-gray-100 pt-4">
+                        <ForwardDispositionForm
+                            form={forwardForm}
+                            targetOptions={dispositionTargetOptions}
+                            targetTypes={targetTypes}
+                            onSubmit={submitForward}
+                        />
+                    </div>
+                ) : null}
+            </div>
+            {disposition.replies?.length ? (
+                <div className="mt-3 space-y-3">
+                    {disposition.replies.map((reply) => (
+                        <DispositionThreadItem
+                            key={reply.id}
+                            disposition={reply}
+                            targetOptions={targetOptions}
+                            dispositionTargetOptions={dispositionTargetOptions}
+                            targetTypes={targetTypes}
+                            letterId={letterId}
+                            depth={depth + 1}
+                        />
+                    ))}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function ForwardDispositionForm({ form, targetOptions, targetTypes, onSubmit }) {
+    const options = optionsByType(form.data.target_type, targetOptions);
+
+    return (
+        <form onSubmit={onSubmit} className="space-y-3">
+            <div className="text-xs font-semibold uppercase text-gray-500">
+                Teruskan Disposisi
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+                <select
+                    value={form.data.target_type}
+                    onChange={(event) =>
+                        form.setData({
+                            ...form.data,
+                            target_type: event.target.value,
+                            target_id: "",
+                        })
+                    }
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                    {targetTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                            {type.name}
+                        </option>
+                    ))}
+                </select>
+                <select
+                    value={form.data.target_id}
+                    onChange={(event) => form.setData("target_id", event.target.value)}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                >
+                    <option value="">Pilih penerima</option>
+                    {options.map((option) => (
+                        <option key={`${form.data.target_type}-${option.id}`} value={option.id}>
+                            {option.label}
+                        </option>
+                    ))}
+                </select>
+            </div>
+            <textarea
+                rows={2}
+                value={form.data.note}
+                onChange={(event) => form.setData("note", event.target.value)}
+                placeholder="Catatan disposisi lanjutan"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+            {form.errors.target_id || form.errors.target_type ? (
+                <div className="text-xs text-red-600">
+                    {form.errors.target_id || form.errors.target_type}
+                </div>
+            ) : null}
+            <button
+                disabled={form.processing || !form.data.target_id}
+                className="inline-flex items-center rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
+            >
+                <Send className="mr-2 h-3.5 w-3.5" />
+                Teruskan
+            </button>
+        </form>
+    );
+}
+
+function buildDispositionTree(dispositions) {
+    const byId = new Map((dispositions || []).map((item) => [item.id, { ...item, replies: [] }]));
+    const roots = [];
+
+    byId.forEach((item) => {
+        if (item.parent_id && byId.has(item.parent_id)) {
+            byId.get(item.parent_id).replies.push(item);
+            return;
+        }
+        roots.push(item);
+    });
+
+    return roots;
+}
+
+function fromUnitLabel(disposition) {
+    if (disposition.from_department?.name) return disposition.from_department.name;
+    if (disposition.from_division?.name) return disposition.from_division.name;
+    if (disposition.from_directorate?.name) return disposition.from_directorate.name;
+    return disposition.from_user?.name || "-";
 }
 
 function ArchivePage() {
@@ -1294,6 +1662,63 @@ function ArchivePage() {
     );
 }
 
+function NotificationsPage() {
+    const { notifications } = usePage().props;
+    const rows = collection(notifications);
+
+    return (
+        <>
+            <Header
+                title="Notifikasi"
+                description="Notifikasi surat dan disposisi untuk akun Anda."
+            />
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <div className="divide-y divide-gray-100">
+                    {rows.length ? (
+                        rows.map((notification) => (
+                            <Link
+                                key={notification.id}
+                                href={`/pegawai/notifikasi/${notification.id}`}
+                                className="grid gap-3 px-5 py-4 text-sm hover:bg-gray-50 md:grid-cols-12 md:items-center"
+                            >
+                                <div className="min-w-0 md:col-span-7">
+                                    <div className="flex items-center gap-2">
+                                        {!notification.read_at ? (
+                                            <span className="h-2 w-2 rounded-full bg-red-600" />
+                                        ) : (
+                                            <Bell className="h-4 w-4 text-gray-400" />
+                                        )}
+                                        <div className="font-semibold text-gray-950">
+                                            {notification.title}
+                                        </div>
+                                    </div>
+                                    <div className="mt-1 break-words text-gray-600">
+                                        {notification.body || "-"}
+                                    </div>
+                                </div>
+                                <div className="text-gray-600 md:col-span-3">
+                                    {letterDisplayNumber(notification.letter)}
+                                </div>
+                                <div className="md:col-span-2 md:text-right">
+                                    <Pill tone={notification.read_at ? "green" : "red"}>
+                                        {notification.read_at ? "Dibaca" : "Belum dibaca"}
+                                    </Pill>
+                                    <div className="mt-2 text-xs text-gray-500">
+                                        {formatDate(notification.created_at)}
+                                    </div>
+                                </div>
+                            </Link>
+                        ))
+                    ) : (
+                        <EmptyState message="Belum ada notifikasi." />
+                    )}
+                </div>
+                <Pagination meta={notifications} />
+            </div>
+        </>
+    );
+}
+
 function MethodButton({ active, title, description, onClick }) {
     return (
         <button
@@ -1314,6 +1739,7 @@ function TargetPicker({
     targets,
     field,
     targetOptions,
+    targetTypes = ["directorate", "division", "division_gm", "department", "department_manager"],
     onAdd,
     onRemove,
     error,
@@ -1328,7 +1754,7 @@ function TargetPicker({
                         {title}
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
-                        Pilih user, unit, atau assignment jabatan organisasi.
+                        Pilih unit atau assignment jabatan organisasi.
                     </div>
                 </div>
                 {error ? (
@@ -1348,14 +1774,23 @@ function TargetPicker({
                     }
                     className="min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
                 >
-                    <option value="user">User</option>
-                    <option value="directorate">Direktur Direktorat</option>
-                    <option value="division">Semua Divisi</option>
-                    <option value="division_gm">GM Divisi</option>
-                    <option value="department">Semua Department</option>
-                    <option value="department_manager">
-                        Manager Department
-                    </option>
+                    {targetTypes.includes("directorate") ? (
+                        <option value="directorate">Direktorat</option>
+                    ) : null}
+                    {targetTypes.includes("division") ? (
+                        <option value="division">Divisi</option>
+                    ) : null}
+                    {targetTypes.includes("division_gm") ? (
+                        <option value="division_gm">GM Divisi</option>
+                    ) : null}
+                    {targetTypes.includes("department") ? (
+                        <option value="department">Department</option>
+                    ) : null}
+                    {targetTypes.includes("department_manager") ? (
+                        <option value="department_manager">
+                            Manager Department
+                        </option>
+                    ) : null}
                 </select>
                 <select
                     value={draft.target_id}
@@ -1631,6 +2066,31 @@ function targetLabels(targets, options) {
     return (targets || []).map((target) => targetLabel(target, options));
 }
 
+function availableDispositionTypes(options = {}) {
+    const configured = options.targetTypes || [];
+    const allTypes = [
+        (options.directorates || []).length
+            ? { id: "directorate", name: "Direktur" }
+            : null,
+        (options.divisions || []).length
+            ? { id: "division", name: "Divisi" }
+            : null,
+        (options.divisions || []).length
+            ? { id: "division_gm", name: "General Manager" }
+            : null,
+        (options.departments || []).length
+            ? { id: "department_manager", name: "Manager" }
+            : null,
+        (options.departments || []).length
+            ? { id: "department", name: "Department" }
+            : null,
+    ].filter(Boolean);
+
+    return configured.length
+        ? allTypes.filter((type) => configured.includes(type.id))
+        : allTypes;
+}
+
 function internalOriginOptions(user) {
     return [
         user?.directorate
@@ -1678,6 +2138,7 @@ export default function Workspace() {
             {section === "create_menu" ? <CreateMenuPage /> : null}
             {section === "create" ? <CreatePage /> : null}
             {section === "archive" ? <ArchivePage /> : null}
+            {section === "notifications" ? <NotificationsPage /> : null}
             {section === "detail" ? <DetailPage /> : null}
         </LayoutPegawai>
     );

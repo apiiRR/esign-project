@@ -2,7 +2,6 @@ import {
     Bell,
     Archive,
     FileText,
-    History,
     KeyRound,
     LayoutDashboard,
     Mail,
@@ -100,12 +99,6 @@ export const menuItems = [
                 href: "/admin/roles",
                 icon: KeyRound,
                 description: "Role admin dan pegawai",
-            },
-            {
-                name: "Audit Trail",
-                href: "/admin/audit-trail",
-                icon: History,
-                description: "Log aktivitas penting",
             },
             {
                 name: "Notifikasi",

@@ -89,7 +89,6 @@ Route::prefix('admin')->name('admin.')->group(function() {
         Route::get('/disposisi', [App\Http\Controllers\Admin\DispositionController::class, 'index'])->name('dispositions.index');
         Route::post('/disposisi', [App\Http\Controllers\Admin\DispositionController::class, 'store'])->name('dispositions.store');
         Route::put('/disposisi/{disposition}', [App\Http\Controllers\Admin\DispositionController::class, 'update'])->name('dispositions.update');
-        Route::get('/audit-trail', [App\Http\Controllers\Admin\AuditTrailController::class, 'index'])->name('audit-trail.index');
         Route::get('/notifikasi', [App\Http\Controllers\Admin\NotificationController::class, 'index'])->name('notifications.index');
 
         // route settings
@@ -148,6 +147,11 @@ Route::prefix('pegawai')->name('pegawai.')->middleware('auth')->group(function()
         ->defaults('mode', 'disposisi')
         ->name('disposisi');
 
+    Route::get('/notifikasi', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
+        ->defaults('section', 'notifications')
+        ->defaults('mode', 'index')
+        ->name('notifications');
+
     Route::get('/surat', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
         ->defaults('section', 'create_menu')
         ->defaults('mode', 'index')
@@ -195,6 +199,21 @@ Route::prefix('pegawai')->name('pegawai.')->middleware('auth')->group(function()
 
     Route::delete('/surat/{letter}', [App\Http\Controllers\Pegawai\PortalController::class, 'destroyDraft'])
         ->name('surat.destroy-draft');
+
+    Route::post('/surat/{letter}/publish', [App\Http\Controllers\Pegawai\PortalController::class, 'publishIncomingExternal'])
+        ->name('surat.publish');
+
+    Route::delete('/surat/{letter}/publish/{target}', [App\Http\Controllers\Pegawai\PortalController::class, 'revokeIncomingExternalPublication'])
+        ->name('surat.publish.revoke');
+
+    Route::post('/surat/{letter}/disposisi', [App\Http\Controllers\Pegawai\PortalController::class, 'storeDisposition'])
+        ->name('surat.dispositions.store');
+
+    Route::post('/disposisi/{disposition}/balas', [App\Http\Controllers\Pegawai\PortalController::class, 'replyDisposition'])
+        ->name('dispositions.reply');
+
+    Route::get('/notifikasi/{notification}', [App\Http\Controllers\Pegawai\PortalController::class, 'openNotification'])
+        ->name('notifications.open');
 
     Route::get('/surat/{letter}', [App\Http\Controllers\Pegawai\PortalController::class, 'detail'])
         ->name('surat.detail');

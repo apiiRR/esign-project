@@ -9,6 +9,7 @@ class LetterFieldRequirementService
     public const DEFINITIONS = [
         'incoming_external' => [
             'letter_type_id' => 'Jenis Surat',
+            'letter_number' => 'Nomor Surat',
             'subject' => 'Perihal',
             'scan_file' => 'File Scan PDF',
             'origin_name' => 'Asal Surat',
@@ -35,6 +36,7 @@ class LetterFieldRequirementService
         ],
         'archive' => [
             'letter_type_id' => 'Jenis Surat',
+            'letter_number' => 'Nomor Surat',
             'subject' => 'Perihal',
             'scan_file' => 'File Scan PDF',
             'notes' => 'Catatan',
@@ -46,6 +48,7 @@ class LetterFieldRequirementService
         return [
             'incoming_external' => [
                 'letter_type_id' => true,
+                'letter_number' => false,
                 'subject' => true,
                 'scan_file' => true,
                 'origin_name' => true,
@@ -72,6 +75,7 @@ class LetterFieldRequirementService
             ],
             'archive' => [
                 'letter_type_id' => true,
+                'letter_number' => false,
                 'subject' => true,
                 'scan_file' => true,
                 'notes' => false,

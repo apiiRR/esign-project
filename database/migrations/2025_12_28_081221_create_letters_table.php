@@ -73,12 +73,18 @@ return new class extends Migration
 
         Schema::create('dispositions', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('parent_id')->nullable()->constrained('dispositions')->cascadeOnDelete();
             $table->foreignId('letter_id')->constrained('letters')->cascadeOnDelete();
             $table->foreignId('from_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('from_directorate_id')->nullable()->constrained('directorates')->nullOnDelete();
+            $table->foreignId('from_division_id')->nullable()->constrained('divisions')->nullOnDelete();
+            $table->foreignId('from_department_id')->nullable()->constrained('departments')->nullOnDelete();
             $table->enum('target_type', ['user', 'division', 'department', 'directorate', 'division_gm', 'department_manager']);
             $table->unsignedBigInteger('target_id')->nullable();
             $table->text('note')->nullable();
             $table->enum('status', ['open', 'done'])->default('open');
+            $table->timestamp('read_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
             $table->timestamps();
         });
 
@@ -89,16 +95,6 @@ return new class extends Migration
             $table->timestamp('read_at')->nullable();
             $table->timestamps();
             $table->unique(['letter_id', 'user_id']);
-        });
-
-        Schema::create('audit_trails', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('action');
-            $table->string('auditable_type')->nullable();
-            $table->unsignedBigInteger('auditable_id')->nullable();
-            $table->json('meta')->nullable();
-            $table->timestamps();
         });
 
         Schema::create('notification_logs', function (Blueprint $table) {
@@ -120,7 +116,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('notification_logs');
-        Schema::dropIfExists('audit_trails');
         Schema::dropIfExists('letter_read_receipts');
         Schema::dropIfExists('dispositions');
         Schema::dropIfExists('letter_attachments');

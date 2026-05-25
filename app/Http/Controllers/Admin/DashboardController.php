@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\AuditTrail;
 use App\Models\Department;
 use App\Models\Directorate;
 use App\Models\Disposition;
@@ -56,7 +55,7 @@ class DashboardController extends Controller
                 ->latest()
                 ->limit(6)
                 ->get(),
-            'recentAudits' => AuditTrail::with('user:id,name,username')
+            'recentNotifications' => NotificationLog::with(['user:id,name,username', 'letter:id,reference,subject'])
                 ->latest()
                 ->limit(6)
                 ->get(),

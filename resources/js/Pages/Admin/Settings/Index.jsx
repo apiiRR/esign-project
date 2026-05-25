@@ -57,7 +57,7 @@ export default function SettingsIndex() {
                             </div>
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-3">
+                        <div className="grid min-w-0 gap-4 md:grid-cols-3">
                             <Field label="Nama Aplikasi" value={data.app_name} onChange={(v) => setData("app_name", v)} error={errors.app_name} />
                             <Field label="Nama Perusahaan" value={data.company_name} onChange={(v) => setData("company_name", v)} error={errors.company_name} />
                             <Field label="Kode Perusahaan" value={data.company_code} onChange={(v) => setData("company_code", v)} error={errors.company_code} />
@@ -110,9 +110,9 @@ export default function SettingsIndex() {
                                     </div>
                                     <div className="grid gap-2">
                                         {Object.entries(fields).map(([field, label]) => (
-                                            <label key={field} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
-                                                <span>{label}</span>
-                                                <span className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+                                            <label key={field} className="flex min-w-0 items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                                                <span className="min-w-0 break-words">{label}</span>
+                                                <span className="flex shrink-0 items-center gap-2 text-xs font-semibold text-gray-500">
                                                     {data.letter_field_requirements?.[context]?.[field] ? "Required" : "Opsional"}
                                                     <input
                                                         type="checkbox"

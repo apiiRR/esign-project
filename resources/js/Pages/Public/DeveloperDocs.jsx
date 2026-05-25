@@ -15,7 +15,7 @@ const cards = [
     {
         title: "Entity Utama",
         icon: Database,
-        items: ["users, directorates, divisions, departments", "letter_types, letter_templates, letters", "letter_targets, attachments, dispositions", "read receipts, audit trails, notification logs"],
+        items: ["users, directorates, divisions, departments", "letter_types, letter_templates, letters", "letter_targets, attachments, dispositions", "read receipts, notification logs", "Laravel file log melalui Log Viewer"],
     },
     {
         title: "Route Utama",
@@ -96,6 +96,13 @@ export default function DeveloperDocs() {
                         <h2 className="text-base font-semibold text-gray-950">Nomor Surat Otomatis</h2>
                         <p className="mt-2 text-sm leading-6 text-gray-600">
                             Format nomor surat diatur dari master Jenis Surat. Variabel yang didukung: {"{day}"}, {"{daily_sequence}"}, {"{letter_type_code}"}, {"{company_code}"}, {"{origin_code}"}, {"{roman_month}"}, {"{month}"}, dan {"{year}"}. Nomor dibooking saat draft atau send.
+                        </p>
+                    </section>
+
+                    <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+                        <h2 className="text-base font-semibold text-gray-950">Rencana Notifikasi Web Push dan Email</h2>
+                        <p className="mt-2 text-sm leading-6 text-gray-600">
+                            Fase berikutnya disarankan memakai tabel subscription per perangkat, VAPID key, queue job, dan Laravel Notification/Mail. Push hanya berisi metadata ringkas dan link detail, sedangkan email menjadi dokumentasi pengiriman. Semua percobaan pengiriman dicatat ke notification_logs.
                         </p>
                     </section>
 

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\AuditTrail;
 use App\Models\Department;
 use App\Models\Disposition;
 use App\Models\Directorate;
@@ -17,13 +16,17 @@ use App\Models\LetterType;
 use App\Models\NotificationLog;
 use App\Models\Setting;
 use App\Models\User;
+use App\Services\DispositionService;
 use App\Services\LetterNumberGenerator;
+use App\Services\LetterFieldRequirementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class LetterController extends Controller
 {
@@ -100,45 +103,53 @@ class LetterController extends Controller
         $isInternal = $type === 'internal';
         $isOutgoing = $type === 'outgoing';
         $supportsTemplate = ($isInternal || $isOutgoing) && $templateEnabled;
+        $context = $isArchive ? 'archive' : $type;
+        $requirements = app(LetterFieldRequirementService::class);
 
         if (! $supportsTemplate) {
             $request->merge(['creation_method' => 'scan']);
         }
 
-        $targetRules = 'required|in:user,directorate,division,department,division_gm,department_manager';
-        $validated = $request->validate([
-            'type' => 'required|in:incoming_external,outgoing,internal',
-            'is_archive' => 'nullable|boolean',
-            'submit_action' => $isInternal || $isOutgoing ? 'required|in:draft,send' : 'nullable',
-            'creation_method' => $supportsTemplate ? 'required|in:scan,template' : 'required|in:scan',
-            'letter_type_id' => 'required|exists:letter_types,id',
-            'letter_template_id' => $supportsTemplate ? 'nullable|required_if:creation_method,template|exists:letter_templates,id' : 'nullable',
-            'letter_number' => 'nullable|string|max:255|unique:letters,letter_number',
-            'subject' => 'required|string|max:255',
-            'title' => 'nullable|string|max:255',
-            'body_rendered' => $supportsTemplate ? 'nullable|string' : 'nullable',
-            'page_count' => $supportsTemplate ? 'nullable|integer|min:1|max:999' : 'nullable',
-            'scan_file' => 'nullable|required_if:creation_method,scan|file|mimes:pdf|max:10240',
-            'targets' => $isInternal ? 'required|array|min:1' : 'nullable|array',
-            'targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
-            'targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
-            'cc_targets' => $isInternal ? 'nullable|array' : 'nullable|array',
-            'cc_targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
-            'cc_targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
-            'payload' => 'nullable|array',
-            'payload.origin_name' => $type === 'incoming_external' && ! $isArchive ? 'required|string|max:255' : 'nullable|string|max:255',
-            'payload.internal_origin_type' => $isInternal || $isOutgoing ? 'required|in:directorate,division,department' : 'nullable',
-            'payload.internal_origin_id' => $isInternal || $isOutgoing ? 'required|integer' : 'nullable',
-            'payload.external_recipient' => $isOutgoing ? 'required|string|max:255' : 'nullable|string|max:255',
-            'payload.notes' => in_array($type, ['incoming_external'], true) ? 'nullable|string' : 'nullable',
-        ]);
+        $targetRules = 'required|in:directorate,division,department,division_gm,department_manager';
+
+        try {
+            $validated = $request->validate([
+                'type' => 'required|in:incoming_external,outgoing,internal',
+                'is_archive' => 'nullable|boolean',
+                'submit_action' => $isInternal || $isOutgoing ? 'required|in:draft,send' : 'nullable',
+                'creation_method' => $supportsTemplate ? 'required|in:scan,template' : 'required|in:scan',
+                'letter_type_id' => 'required|exists:letter_types,id',
+                'letter_template_id' => $supportsTemplate ? 'nullable|required_if:creation_method,template|exists:letter_templates,id' : 'nullable',
+                'letter_number' => ($type === 'incoming_external' && ! $isArchive ? 'required' : ($requirements->required($context, 'letter_number') ? 'required' : 'nullable')) . '|string|max:255|unique:letters,letter_number',
+                'subject' => 'required|string|max:255',
+                'title' => 'nullable|string|max:255',
+                'body_rendered' => $supportsTemplate ? 'nullable|string' : 'nullable',
+                'page_count' => $supportsTemplate ? 'nullable|integer|min:1|max:999' : 'nullable',
+                'scan_file' => 'bail|nullable|required_if:creation_method,scan|file|mimes:pdf|max:10240',
+                'targets' => $isInternal ? 'required|array|min:1' : 'nullable|array',
+                'targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
+                'targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
+                'cc_targets' => $isInternal ? 'nullable|array' : 'nullable|array',
+                'cc_targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
+                'cc_targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
+                'payload' => 'nullable|array',
+                'payload.origin_name' => $type === 'incoming_external' && ! $isArchive ? 'required|string|max:255' : 'nullable|string|max:255',
+                'payload.internal_origin_type' => $isInternal || $isOutgoing ? 'required|in:directorate,division,department' : 'nullable',
+                'payload.internal_origin_id' => $isInternal || $isOutgoing ? 'required|integer' : 'nullable',
+                'payload.external_recipient' => $isOutgoing ? 'required|string|max:255' : 'nullable|string|max:255',
+                'payload.notes' => in_array($type, ['incoming_external'], true) ? 'nullable|string' : 'nullable',
+            ], $this->uploadValidationMessages());
+        } catch (ValidationException $exception) {
+            $this->logUploadValidationFailure($request, $exception);
+            throw $exception;
+        }
 
         $letter = DB::transaction(function () use ($request, $validated, $isInternal, $isOutgoing, $supportsTemplate) {
             $user = $request->user();
             $letterType = LetterType::query()->findOrFail($validated['letter_type_id']);
             $letterNumber = $validated['letter_number'] ?? null;
 
-            if (! $letterNumber) {
+            if (! $letterNumber && $validated['type'] !== 'incoming_external') {
                 $letterNumber = app(LetterNumberGenerator::class)->generate(
                     $letterType,
                     $user,
@@ -210,14 +221,6 @@ class LetterController extends Controller
                 }
             }
 
-            AuditTrail::create([
-                'user_id' => $user->id,
-                'action' => $letter->status === 'draft' ? 'admin.letter.drafted' : 'letters.created',
-                'auditable_type' => Letter::class,
-                'auditable_id' => $letter->id,
-                'meta' => ['reference' => $letter->reference, 'type' => $letter->type, 'status' => $letter->status],
-            ]);
-
             return $letter;
         });
 
@@ -232,6 +235,10 @@ class LetterController extends Controller
             'payload' => 'nullable|array',
         ]);
 
+        if ($validated['context'] === 'incoming_external') {
+            return response()->json(['letter_number' => null]);
+        }
+
         return response()->json([
             'letter_number' => $generator->preview(
                 LetterType::query()->findOrFail($validated['letter_type_id']),
@@ -242,7 +249,7 @@ class LetterController extends Controller
         ]);
     }
 
-    public function show(Letter $letter)
+    public function show(Letter $letter, DispositionService $dispositionService)
     {
         $letter->load([
             'creator:id,name,username',
@@ -251,17 +258,17 @@ class LetterController extends Controller
             'targets',
             'attachments',
             'dispositions.fromUser:id,name,username',
-            'readReceipts.user:id,name,username',
+            'dispositions.fromDirectorate',
+            'dispositions.fromDivision',
+            'dispositions.fromDepartment',
+            'readReceipts' => fn ($query) => $query->where('user_id', '!=', $letter->created_by),
+            'readReceipts.user:id,name,username,position',
         ]);
 
         return inertia('Admin/Letters/Show', [
             'letter' => $letter,
             'targetOptions' => $this->targetOptions(),
-            'audits' => AuditTrail::with('user:id,name,username')
-                ->where('auditable_type', Letter::class)
-                ->where('auditable_id', $letter->id)
-                ->latest()
-                ->get(),
+            'dispositionTargetOptions' => $dispositionService->optionsFor(auth()->user(), true, $letter),
             'notifications' => NotificationLog::with('user:id,name,username')
                 ->where('letter_id', $letter->id)
                 ->latest()
@@ -277,14 +284,6 @@ class LetterController extends Controller
         ]);
 
         $letter->update($validated);
-
-        AuditTrail::create([
-            'user_id' => auth()->id(),
-            'action' => 'letters.updated',
-            'auditable_type' => Letter::class,
-            'auditable_id' => $letter->id,
-            'meta' => $validated,
-        ]);
 
         return back()->with('success', 'Status surat berhasil diperbarui.');
     }
@@ -368,5 +367,38 @@ class LetterController extends Controller
                 ->orderBy('name')
                 ->get(),
         ];
+    }
+
+    private function uploadValidationMessages(): array
+    {
+        return [
+            'scan_file.uploaded' => 'File gagal diunggah. Pastikan file PDF dan ukuran tidak melebihi batas upload server.',
+            'scan_file.required_if' => 'File Scan PDF wajib diunggah.',
+            'scan_file.file' => 'File Scan PDF tidak valid.',
+            'scan_file.mimes' => 'File Scan harus berupa PDF.',
+            'scan_file.max' => 'Ukuran File Scan PDF maksimal 10MB.',
+        ];
+    }
+
+    private function logUploadValidationFailure(Request $request, ValidationException $exception): void
+    {
+        if (! array_key_exists('scan_file', $exception->errors())) {
+            return;
+        }
+
+        $file = $request->file('scan_file');
+
+        Log::warning('Scan PDF upload validation failed in admin letter form', [
+            'user_id' => $request->user()?->id,
+            'route' => $request->route()?->getName(),
+            'path' => $request->path(),
+            'content_length' => $request->server('CONTENT_LENGTH'),
+            'php_upload_max_filesize' => ini_get('upload_max_filesize'),
+            'php_post_max_size' => ini_get('post_max_size'),
+            'file_name' => $file?->getClientOriginalName(),
+            'file_size' => $file?->getSize(),
+            'file_error' => $file && method_exists($file, 'getError') ? $file->getError() : null,
+            'errors' => $exception->errors()['scan_file'],
+        ]);
     }
 }

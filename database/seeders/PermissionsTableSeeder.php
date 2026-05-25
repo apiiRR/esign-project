@@ -19,7 +19,6 @@ class PermissionsTableSeeder extends Seeder
             'pegawai.letters.create',
             'pegawai.archive',
             'organization.index',
-            'audit-trails.index',
             'notifications.index',
             'users.index',
             'users.create',

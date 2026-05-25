@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin\Auth;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Http\Controllers\Controller;
-use App\Services\AuditLogger;
 
 class LoginController extends Controller
 {    
@@ -39,10 +38,6 @@ class LoginController extends Controller
             ->first();
 
         if ($user && $user->status !== 'active') {
-            app(AuditLogger::class)->log('auth.login_blocked_inactive', $request, [
-                'username' => $request->username,
-            ], $user->id);
-
             return back()->withErrors([
                 'username' => 'Akun tidak aktif.',
             ]);
@@ -56,21 +51,10 @@ class LoginController extends Controller
             $request->session()->regenerate();
             $user->update(['last_login_at' => now()]);
 
-            app(AuditLogger::class)->log('auth.login', $request, [
-                'username' => $user->username,
-                'role' => $user->role,
-                'logged_in_at' => now()->toDateTimeString(),
-            ], $user->id);
-
             return $user->role === 'admin'
                 ? redirect()->route('admin.dashboard')
                 : redirect()->route('pegawai.dashboard');
         }
-
-        app(AuditLogger::class)->log('auth.login_failed', $request, [
-            'username' => $request->username,
-            'reason' => $user ? 'invalid_password' : 'user_not_found',
-        ], $user?->id);
 
         // if login fails
         return back()->withErrors([
@@ -85,16 +69,6 @@ class LoginController extends Controller
      */
     public function logout(Request $request)
     {
-        $user = auth()->user();
-
-        if ($user) {
-            app(AuditLogger::class)->log('auth.logout', $request, [
-                'username' => $user->username,
-                'role' => $user->role,
-                'logged_out_at' => now()->toDateTimeString(),
-            ], $user->id);
-        }
-
         // logout user
         auth()->logout();
 

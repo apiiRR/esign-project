@@ -2,9 +2,13 @@ import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 import { useEffect, useMemo, useState } from "react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
 import NotaDinasPreview from "@/Pages/Admin/LetterTemplates/Components/NotaDinasPreview";
+import FormErrorSummary from "@/Shared/FormErrorSummary";
 import { Archive, Plus, Send, Trash2, Upload } from "lucide-react";
 
+const MAX_PDF_SIZE = 10 * 1024 * 1024;
+
 export default function LetterForm() {
+    const pageProps = usePage().props;
     const {
         type,
         templates = [],
@@ -13,7 +17,8 @@ export default function LetterForm() {
         auth,
         isArchive = false,
         templateEnabled = false,
-    } = usePage().props;
+        errors: serverErrors = {},
+    } = pageProps;
     const isIncomingExternal = type === "incoming_external" && !isArchive;
     const isInternal = type === "internal";
     const isOutgoing = type === "outgoing";
@@ -26,11 +31,12 @@ export default function LetterForm() {
     });
     const originOptions = internalOriginOptions(auth?.user);
     const defaultOrigin = originOptions[0] || { type: "", id: "", name: "" };
-    const [recipientDraft, setRecipientDraft] = useState({ target_type: "user", target_id: "" });
-    const [ccDraft, setCcDraft] = useState({ target_type: "user", target_id: "" });
+    const [recipientDraft, setRecipientDraft] = useState({ target_type: "department", target_id: "" });
+    const [ccDraft, setCcDraft] = useState({ target_type: "department", target_id: "" });
     const [letterNumberTouched, setLetterNumberTouched] = useState(false);
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
     const [submitting, setSubmitting] = useState(false);
+    const [clientErrors, setClientErrors] = useState([]);
 
     const { data, setData, errors } = useForm({
         type,
@@ -59,13 +65,14 @@ export default function LetterForm() {
             notes: "",
         },
     });
+    const formErrors = { ...serverErrors, ...errors };
 
     const compatibleTemplates = templates.filter((template) =>
         isOutgoing ? ["outgoing", "both"].includes(template.category) : ["internal", "both"].includes(template.category),
     );
     const selectedTemplate = compatibleTemplates.find((template) => String(template.id) === String(data.letter_template_id)) || compatibleTemplates[0];
     const selectedLetterType = letterTypes.find((letterType) => String(letterType.id) === String(data.letter_type_id));
-    const numberingActive = Boolean(selectedLetterType?.numbering_enabled && (selectedLetterType.numbering_contexts || []).includes(context));
+    const numberingActive = Boolean(!isIncomingExternal && selectedLetterType?.numbering_enabled && (selectedLetterType.numbering_contexts || []).includes(context));
 
     useEffect(() => {
         if (compatibleTemplates.length && !compatibleTemplates.some((template) => String(template.id) === String(data.letter_template_id))) {
@@ -119,9 +126,36 @@ export default function LetterForm() {
     }
 
     function handleFile(file) {
-        setData("scan_file", file || null);
         if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-        setPdfPreviewUrl(file ? URL.createObjectURL(file) : "");
+        setClientErrors([]);
+
+        if (!file) {
+            setData("scan_file", null);
+            setPdfPreviewUrl("");
+            return;
+        }
+
+        const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+        if (!isPdf) {
+            const message = "File Scan harus berupa PDF.";
+            setData("scan_file", null);
+            setPdfPreviewUrl("");
+            setClientErrors([message]);
+            window.alert(message);
+            return;
+        }
+
+        if (file.size > MAX_PDF_SIZE) {
+            const message = "Ukuran File Scan PDF maksimal 10MB. Pilih file yang lebih kecil atau kompres PDF terlebih dahulu.";
+            setData("scan_file", null);
+            setPdfPreviewUrl("");
+            setClientErrors([message]);
+            window.alert(message);
+            return;
+        }
+
+        setData("scan_file", file);
+        setPdfPreviewUrl(URL.createObjectURL(file));
     }
 
     function addTarget(kind) {
@@ -140,10 +174,20 @@ export default function LetterForm() {
 
     function submit(event, action = "send") {
         event.preventDefault();
+        if (clientErrors.length) {
+            window.alert(clientErrors[0]);
+            return;
+        }
         setSubmitting(true);
         router.post("/admin/surat", { ...data, submit_action: action }, {
             forceFormData: true,
             preserveScroll: true,
+            onError: (validationErrors) => {
+                const messages = Object.values(validationErrors || {}).flat().filter(Boolean);
+                const message = messages[0] || "Form gagal disimpan. Periksa kembali input yang wajib diisi.";
+                setClientErrors(messages);
+                window.alert(message);
+            },
             onFinish: () => setSubmitting(false),
         });
     }
@@ -175,6 +219,8 @@ export default function LetterForm() {
                         <p className="mt-2 text-sm text-gray-600">{description}</p>
                     </div>
 
+                    <FormErrorSummary errors={formErrors} extraErrors={clientErrors} />
+
                     <div className="grid gap-6 xl:grid-cols-12">
                         <div className="min-w-0 space-y-5 xl:col-span-6">
                             <Card>
@@ -188,24 +234,24 @@ export default function LetterForm() {
                             </Card>
 
                             <Card className="space-y-4">
-                                <Select label="Jenis Surat" value={data.letter_type_id} onChange={(value) => { setLetterNumberTouched(false); setData("letter_type_id", value); }} options={letterTypes.map((letterType) => ({ id: letterType.id, name: `${letterType.name}${letterType.code ? ` (${letterType.code})` : ""}` }))} error={errors.letter_type_id} />
-                                <Field label="Nomor Surat" value={data.letter_number} onChange={(value) => { setLetterNumberTouched(true); setData("letter_number", value); }} error={errors.letter_number} placeholder={numberingActive ? "Nomor otomatis akan diisi setelah jenis dan asal surat dipilih" : "Opsional"} />
+                                <Select label="Jenis Surat" value={data.letter_type_id} onChange={(value) => { setLetterNumberTouched(false); setData("letter_type_id", value); }} options={letterTypes.map((letterType) => ({ id: letterType.id, name: `${letterType.name}${letterType.code ? ` (${letterType.code})` : ""}` }))} error={formErrors.letter_type_id} />
+                                <Field label="Nomor Surat" value={data.letter_number} onChange={(value) => { setLetterNumberTouched(true); setData("letter_number", value); }} error={formErrors.letter_number} placeholder={isIncomingExternal ? "Masukkan nomor surat dari dokumen eksternal" : numberingActive ? "Nomor otomatis akan diisi setelah jenis dan asal surat dipilih" : "Opsional"} />
                                 {numberingActive ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-800">Nomor otomatis aktif dan akan dibooking saat draft/send.</div> : null}
-                                <Field label="Perihal" value={data.subject} onChange={(value) => setData("subject", value)} error={errors.subject} placeholder="Perihal surat" />
+                                <Field label="Perihal" value={data.subject} onChange={(value) => setData("subject", value)} error={formErrors.subject} placeholder="Perihal surat" />
                                 {isInternal || isOutgoing ? <Select label="Asal Surat" value={`${data.payload.internal_origin_type}:${data.payload.internal_origin_id}`} onChange={(value) => {
                                     const selected = originOptions.find((option) => option.id === value);
                                     if (!selected) return;
                                     setData("payload", { ...data.payload, internal_origin_type: selected.type, internal_origin_id: selected.rawId, internal_origin_name: selected.name });
                                     setLetterNumberTouched(false);
-                                }} options={originOptions} error={errors["payload.internal_origin_type"] || errors["payload.internal_origin_id"]} noPlaceholder /> : null}
-                                {isOutgoing ? <Field label="Tujuan Eksternal" value={data.payload.external_recipient} onChange={(value) => updatePayload("external_recipient", value)} error={errors["payload.external_recipient"]} placeholder="Nama perusahaan/instansi penerima" /> : null}
-                                {isIncomingExternal ? <Field label="Asal Surat" value={data.payload.origin_name} onChange={(value) => updatePayload("origin_name", value)} error={errors["payload.origin_name"]} placeholder="Nama instansi/perusahaan pengirim" /> : null}
-                                {isIncomingExternal || isArchive ? <Textarea label="Catatan" value={data.payload.notes} onChange={(value) => updatePayload("notes", value)} rows={4} error={errors["payload.notes"]} placeholder="Catatan tambahan" /> : null}
+                                }} options={originOptions} error={formErrors["payload.internal_origin_type"] || formErrors["payload.internal_origin_id"]} noPlaceholder /> : null}
+                                {isOutgoing ? <Field label="Tujuan Eksternal" value={data.payload.external_recipient} onChange={(value) => updatePayload("external_recipient", value)} error={formErrors["payload.external_recipient"]} placeholder="Nama perusahaan/instansi penerima" /> : null}
+                                {isIncomingExternal ? <Field label="Asal Surat" value={data.payload.origin_name} onChange={(value) => updatePayload("origin_name", value)} error={formErrors["payload.origin_name"]} placeholder="Nama instansi/perusahaan pengirim" /> : null}
+                                {isIncomingExternal || isArchive ? <Textarea label="Catatan" value={data.payload.notes} onChange={(value) => updatePayload("notes", value)} rows={4} error={formErrors["payload.notes"]} placeholder="Catatan tambahan" /> : null}
                             </Card>
 
                             {isInternal ? (
                                 <>
-                                    <TargetPicker title="Tujuan" draft={recipientDraft} setDraft={setRecipientDraft} targets={data.targets} field="targets" targetOptions={targetOptions} onAdd={() => addTarget("recipient")} onRemove={removeTarget} error={errors.targets} />
+                                    <TargetPicker title="Tujuan" draft={recipientDraft} setDraft={setRecipientDraft} targets={data.targets} field="targets" targetOptions={targetOptions} onAdd={() => addTarget("recipient")} onRemove={removeTarget} error={formErrors.targets} />
                                     <TargetPicker title="Tembusan" draft={ccDraft} setDraft={setCcDraft} targets={data.cc_targets} field="cc_targets" targetOptions={targetOptions} onAdd={() => addTarget("cc")} onRemove={removeTarget} />
                                 </>
                             ) : null}
@@ -222,11 +268,11 @@ export default function LetterForm() {
                                             </div>
                                         </div>
                                     </div>
-                                    {errors.scan_file ? <p className="mt-2 text-xs text-red-600">{errors.scan_file}</p> : null}
+                                    {formErrors.scan_file ? <p className="mt-2 text-xs text-red-600">{formErrors.scan_file}</p> : null}
                                 </Card>
                             ) : (
                                 <Card className="space-y-4">
-                                    <Select label="Template" value={data.letter_template_id || compatibleTemplates[0]?.id || ""} onChange={(value) => setData("letter_template_id", value)} options={compatibleTemplates.map((template) => ({ id: template.id, name: template.name }))} error={errors.letter_template_id} noPlaceholder />
+                                    <Select label="Template" value={data.letter_template_id || compatibleTemplates[0]?.id || ""} onChange={(value) => setData("letter_template_id", value)} options={compatibleTemplates.map((template) => ({ id: template.id, name: template.name }))} error={formErrors.letter_template_id} noPlaceholder />
                                     <Textarea label="Kepada Yth" value={data.payload.recipients} onChange={(value) => updatePayload("recipients", value)} placeholder="Kosongkan untuk memakai daftar tujuan" />
                                     <Textarea label="Tembusan" value={data.payload.cc} onChange={(value) => updatePayload("cc", value)} placeholder="Kosongkan untuk memakai daftar tembusan" />
                                     <div className="grid gap-4 md:grid-cols-2">
@@ -234,7 +280,7 @@ export default function LetterForm() {
                                         <Field label="Tanggal" value={data.payload.letter_date} onChange={(value) => updatePayload("letter_date", value)} />
                                     </div>
                                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Jumlah halaman: {data.page_count || 1}</div>
-                                    <Textarea label="Isi Nota Dinas" value={data.body_rendered} onChange={(value) => setData("body_rendered", value)} rows={8} error={errors.body_rendered} />
+                                    <Textarea label="Isi Nota Dinas" value={data.body_rendered} onChange={(value) => setData("body_rendered", value)} rows={8} error={formErrors.body_rendered} />
                                 </Card>
                             )}
 
@@ -252,9 +298,9 @@ export default function LetterForm() {
                                     <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">{data.creation_method === "template" ? `${data.page_count || 1} halaman` : "PDF"}</span>
                                 </div>
                                 {data.creation_method === "scan" ? (
-                                    pdfPreviewUrl ? <iframe title="Preview PDF" src={pdfPreviewUrl} className="h-[720px] w-full bg-gray-100" /> : <div className="flex h-[720px] items-center justify-center bg-gray-50 px-5 text-center text-sm text-gray-500">Pilih file PDF untuk melihat preview.</div>
+                                    pdfPreviewUrl ? <iframe title="Preview PDF" src={pdfPreviewUrl} className="h-[520px] md:h-[720px] w-full bg-gray-100" /> : <div className="flex h-[520px] md:h-[720px] items-center justify-center bg-gray-50 px-5 text-center text-sm text-gray-500">Pilih file PDF untuk melihat preview.</div>
                                 ) : (
-                                    <NotaDinasPreview html={data.body_rendered} metadata={metadata} onPageCountChange={(count) => data.page_count !== count && setData("page_count", count)} className="h-[720px]" />
+                                    <NotaDinasPreview html={data.body_rendered} metadata={metadata} onPageCountChange={(count) => data.page_count !== count && setData("page_count", count)} className="h-[520px] md:h-[720px]" />
                                 )}
                             </div>
                         </div>
@@ -280,13 +326,12 @@ function TargetPicker({ title, draft, setDraft, targets, field, targetOptions, o
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                     <div className="text-sm font-semibold text-gray-950">{title}</div>
-                    <div className="mt-1 text-xs text-gray-500">Pilih user, unit, atau assignment jabatan organisasi.</div>
+                    <div className="mt-1 text-xs text-gray-500">Pilih unit atau assignment jabatan organisasi.</div>
                 </div>
                 {error ? <span className="text-xs font-semibold text-red-600">{error}</span> : null}
             </div>
             <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,180px)_minmax(0,1fr)_120px]">
                 <select value={draft.target_type} onChange={(event) => setDraft({ target_type: event.target.value, target_id: "" })} className="min-w-0 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-emerald-600">
-                    <option value="user">User</option>
                     <option value="directorate">Direktur Direktorat</option>
                     <option value="division">Semua Divisi</option>
                     <option value="division_gm">GM Divisi</option>

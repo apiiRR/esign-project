@@ -1,6 +1,6 @@
 # Surat & Arsip Digital PT Berdikari
 
-Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, dan Tailwind CSS untuk PT Berdikari. Aplikasi ini mengelola surat masuk eksternal, surat internal, surat keluar, arsip scan, disposisi, status baca, template Nota Dinas, nomor surat otomatis, audit trail, dan notifikasi dasar.
+Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, Tailwind CSS, dan PWA untuk PT Berdikari. Aplikasi ini mengelola surat masuk eksternal, surat internal, surat keluar, arsip scan, disposisi, status baca, template Nota Dinas, nomor surat otomatis, log teknis, dan notifikasi dasar.
 
 ## Fitur Utama
 
@@ -12,11 +12,26 @@ Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, dan Tailw
 - Portal pegawai untuk inbox internal, tebusan, disposisi, buat surat, dan arsip saya.
 - Surat internal dan surat keluar mendukung `Simpan Draft`, `Send`, dan `Hapus Draft`.
 - Upload dan preview file scan PDF.
-- Read receipt, audit trail, dan notification log.
+- Read receipt, notification log, dan Laravel Log Viewer untuk error teknis.
+- PWA installable minimal untuk laptop dan perangkat mobile.
 - Dokumentasi aplikasi:
   - Admin: `/admin/dokumentasi`
   - Pegawai: `/pegawai/dokumentasi`
   - Developer public: `/developer-docs`
+- Dokumentasi teknis source code tersedia di folder [`docs/`](docs/README.md).
+
+## Dokumentasi Teknis Developer
+
+Dokumentasi teknis untuk programmer tersedia di folder `docs/`:
+
+- [`docs/README.md`](docs/README.md): indeks dokumentasi teknis.
+- [`docs/architecture.md`](docs/architecture.md): arsitektur aplikasi.
+- [`docs/backend.md`](docs/backend.md): controller, service, dan fungsi backend.
+- [`docs/data-model.md`](docs/data-model.md): model, tabel, relasi, dan enum penting.
+- [`docs/workflows.md`](docs/workflows.md): alur bisnis surat, publish, disposisi, notifikasi, dan status baca.
+- [`docs/frontend.md`](docs/frontend.md): struktur React/Inertia, halaman, komponen, dan helper frontend.
+- [`docs/operations.md`](docs/operations.md): setup lokal, build, testing, storage, dan troubleshooting.
+- [`docs/controllers-reference.md`](docs/controllers-reference.md): indeks cepat controller dan fungsi.
 
 ## Prasyarat
 
@@ -26,6 +41,7 @@ Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, dan Tailw
 - NPM.
 - PostgreSQL.
 - Extension PHP yang umum dipakai Laravel seperti `pdo_pgsql`, `mbstring`, `openssl`, `fileinfo`, dan `json`.
+- Batas upload PHP disarankan: `upload_max_filesize >= 10M`, `post_max_size > upload_max_filesize`, dan `memory_limit` cukup besar.
 
 ## Instalasi Lokal
 
@@ -79,11 +95,11 @@ Setelah login:
 - Dashboard.
 - Surat: Masuk Eksternal, Internal, Arsip Surat.
 - Master Data: Direktorat, Divisi, Department, Template Surat, Jenis Surat.
-- Administrasi: Users, Role & Hak Akses, Audit Trail, Notifikasi.
+- Administrasi: Users, Role & Hak Akses, Notifikasi.
 - Settings.
 - Dokumentasi.
 
-Admin mengatur data master, user, template, jenis surat, format nomor surat, audit, notifikasi, dan pengaturan dasar aplikasi.
+Admin mengatur data master, user, template, jenis surat, format nomor surat, notifikasi, log teknis, dan pengaturan dasar aplikasi.
 
 ## Menu Pegawai
 
@@ -128,6 +144,19 @@ Keterangan:
 
 Nomor dibooking saat user menekan `Simpan Draft` atau `Send`. User tetap dapat menghapus atau menyesuaikan nomor sebelum submit. Jika nomor otomatis aktif dan field nomor dikosongkan, backend akan membuat nomor saat submit.
 
+## PWA dan Rencana Notifikasi
+
+Aplikasi dibuat installable sebagai PWA dengan strategi aman: aset aplikasi dapat dicache, tetapi data surat tetap membutuhkan koneksi agar akses dan permission selalu terbaru.
+
+Rencana teknis untuk fase notifikasi berikutnya:
+
+- Simpan Web Push subscription per user/perangkat di tabel khusus.
+- Gunakan VAPID key dan queue job untuk mengirim push saat surat atau disposisi benar-benar `sent`.
+- Kirim email melalui Laravel Notification/Mail sebagai dokumentasi resmi.
+- Catat hasil pengiriman ke `notification_logs` dengan channel `web_push` atau `email`, status, error aman, dan timestamp.
+- Isi push/email cukup metadata dan link detail; jangan kirim file lampiran atau isi sensitif secara langsung.
+- Web Push production wajib HTTPS dan perlu uji perangkat, terutama iOS PWA.
+
 ## Troubleshooting
 
 Jika muncul error table missing setelah update:
@@ -143,6 +172,20 @@ Jika file lampiran tidak bisa dibuka:
 php artisan storage:link
 ```
 
+Jika upload PDF di atas 2MB gagal dengan pesan `scan_file` atau `The scan file failed to upload`, naikkan limit PHP di `php.ini`. Untuk PHP Homebrew 8.3 biasanya file-nya ada di `/opt/homebrew/etc/php/8.3/php.ini`:
+
+```ini
+upload_max_filesize = 10M
+post_max_size = 12M
+memory_limit = 256M
+```
+
+Setelah mengubah `php.ini`, restart server PHP/Laravel yang sedang berjalan. Cek nilai aktif dengan:
+
+```bash
+php -i | grep -E "upload_max_filesize|post_max_size|memory_limit"
+```
+
 Jika asset React tidak berubah:
 
 ```bash
@@ -154,6 +197,7 @@ Jika muncul warning `Module "mongodb" is already loaded`, periksa konfigurasi PH
 ## Catatan Developer
 
 - Route publik dokumentasi developer: `/developer-docs`.
+- Log Viewer admin: `/log-viewer`.
 - Route admin dilindungi middleware `auth` dan `role:admin`.
 - Route pegawai dilindungi middleware `auth`.
 - File upload surat memakai disk `public`.

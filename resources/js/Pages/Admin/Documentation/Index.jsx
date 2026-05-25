@@ -7,9 +7,9 @@ const sections = [
         title: "Monitoring Surat",
         icon: FileText,
         items: [
-            "Dashboard menampilkan ringkasan surat masuk eksternal, surat internal, arsip scan, user, unit organisasi, disposisi, audit, dan notifikasi.",
+            "Dashboard menampilkan ringkasan surat masuk eksternal, surat internal, arsip scan, user, unit organisasi, disposisi, dan notifikasi.",
             "Menu Surat memisahkan Surat Masuk Eksternal, Surat Internal, dan Arsip Surat agar proses operasional lebih mudah dipantau.",
-            "Detail surat menampilkan metadata, jenis surat, nomor surat, status, lampiran, target, tembusan, disposisi, status baca, audit, dan log notifikasi.",
+            "Detail surat menampilkan metadata, jenis surat, nomor surat, status, lampiran, target, tembusan, disposisi, status baca, dan log notifikasi.",
         ],
     },
     {
@@ -41,12 +41,12 @@ const sections = [
         ],
     },
     {
-        title: "Template, Settings, Audit, dan Notifikasi",
+        title: "Template, Settings, Log, dan Notifikasi",
         icon: Settings,
         items: [
             "Template Surat mengatur format Nota Dinas untuk surat internal dan surat keluar jika metode template diaktifkan.",
             "Settings disederhanakan untuk kebutuhan aplikasi: nama aplikasi, nama perusahaan, kode perusahaan, dan logo.",
-            "Audit Trail mencatat aktivitas penting. Notifikasi disimpan sebagai log saat surat dikirim ke penerima.",
+            "Log Viewer digunakan admin untuk membaca error teknis Laravel. Notifikasi disimpan sebagai log saat surat dikirim ke penerima.",
         ],
     },
 ];
@@ -65,7 +65,7 @@ export default function AdminDocumentation() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Admin</h1>
                                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                                    Panduan operasional admin untuk mengelola user, master data, template, surat, audit, notifikasi, dan pengaturan aplikasi Surat & Arsip Digital PT Berdikari.
+                                    Panduan operasional admin untuk mengelola user, master data, template, surat, notifikasi, log teknis, dan pengaturan aplikasi Surat & Arsip Digital PT Berdikari.
                                 </p>
                             </div>
                         </div>

@@ -3,7 +3,7 @@ import LayoutAdmin from "@/Layouts/LayoutAdmin";
 import { Activity, Archive, Bell, Building2, FileInput, Mail, Users } from "lucide-react";
 
 export default function Dashboard() {
-    const { stats, recentLetters, recentAudits } = usePage().props;
+    const { stats, recentLetters, recentNotifications } = usePage().props;
     const cards = [
         ["Surat Masuk Eksternal", stats.incoming_external, FileInput, "/admin/surat/masuk-eksternal"],
         ["Surat Internal", stats.internal, Mail, "/admin/surat/internal"],
@@ -20,7 +20,7 @@ export default function Dashboard() {
                 <div className="space-y-6">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-950">Dashboard Admin</h1>
-                        <p className="mt-2 text-sm text-gray-600">Ringkasan data nyata surat, arsip scan, user, disposisi, audit, dan notifikasi.</p>
+                        <p className="mt-2 text-sm text-gray-600">Ringkasan data nyata surat, arsip scan, user, disposisi, dan notifikasi.</p>
                     </div>
                     <div className="grid grid-cols-12 gap-4">
                         {cards.map(([label, value, Icon, href]) => (
@@ -38,29 +38,29 @@ export default function Dashboard() {
                             </div>
                             <div className="divide-y divide-gray-100">
                                 {(recentLetters || []).map((letter) => (
-                                    <Link key={letter.id} href={`/admin/surat/${letter.id}`} className="grid grid-cols-12 gap-3 px-5 py-4 text-sm hover:bg-gray-50">
-                                        <div className="col-span-6">
-                                            <div className="font-semibold text-gray-950">{letter.subject}</div>
-                                            <div className="text-xs text-gray-500">{letter.reference}</div>
+                                    <Link key={letter.id} href={`/admin/surat/${letter.id}`} className="grid min-w-0 gap-3 px-5 py-4 text-sm hover:bg-gray-50 md:grid-cols-12 md:items-center">
+                                        <div className="min-w-0 md:col-span-6">
+                                            <div className="font-semibold text-gray-950 break-words">{letter.subject}</div>
+                                            <div className="text-xs text-gray-500 break-words">{letter.reference}</div>
                                         </div>
-                                        <div className="col-span-2 text-gray-600">{letter.type}</div>
-                                        <div className="col-span-2 text-gray-600">{letter.status}</div>
-                                        <div className="col-span-2 text-right text-gray-500">{letter.creator?.name || "-"}</div>
+                                        <div className="text-gray-600 md:col-span-2">{letter.type}</div>
+                                        <div className="text-gray-600 md:col-span-2">{letter.status}</div>
+                                        <div className="text-gray-500 md:col-span-2 md:text-right">{letter.creator?.name || "-"}</div>
                                     </Link>
                                 ))}
                             </div>
                         </div>
                         <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
                             <div className="border-b border-gray-200 px-5 py-4">
-                                <h2 className="font-semibold text-gray-950">Audit Terbaru</h2>
+                                <h2 className="font-semibold text-gray-950">Notifikasi Terbaru</h2>
                             </div>
                             <div className="space-y-4 p-5">
-                                {(recentAudits || []).map((audit) => (
-                                    <div key={audit.id} className="flex gap-3 text-sm">
+                                {(recentNotifications || []).map((notification) => (
+                                    <div key={notification.id} className="flex gap-3 text-sm">
                                         <Bell className="mt-0.5 h-4 w-4 text-emerald-700" />
-                                        <div>
-                                            <div className="font-medium text-gray-950">{audit.action}</div>
-                                            <div className="text-xs text-gray-500">{audit.user?.name || "System"} · {audit.created_at}</div>
+                                        <div className="min-w-0">
+                                            <div className="font-medium text-gray-950 break-words">{notification.title}</div>
+                                            <div className="text-xs text-gray-500 break-words">{notification.user?.name || "-"} · {notification.letter?.reference || "-"} · {notification.created_at}</div>
                                         </div>
                                     </div>
                                 ))}

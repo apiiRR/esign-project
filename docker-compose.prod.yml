@@ -1,0 +1,124 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      QUEUE_CONNECTION: database
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      FILESYSTEM_DISK: public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - app_storage:/var/www/html/storage
+      - app_cache:/var/www/html/bootstrap/cache
+    networks:
+      - app
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "${APP_HTTP_PORT:-8080}:80"
+    volumes:
+      - app_storage:/var/www/html/storage:ro
+    networks:
+      - app
+
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      QUEUE_CONNECTION: database
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      FILESYSTEM_DISK: public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["php", "artisan", "queue:work", "database", "--sleep=3", "--tries=3", "--timeout=120"]
+    volumes:
+      - app_storage:/var/www/html/storage
+      - app_cache:/var/www/html/bootstrap/cache
+    networks:
+      - app
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      QUEUE_CONNECTION: database
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      FILESYSTEM_DISK: public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - app_storage:/var/www/html/storage
+      - app_cache:/var/www/html/bootstrap/cache
+    networks:
+      - app
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-surat_digital}
+      POSTGRES_USER: ${DB_USERNAME:-surat_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-surat_user} -d ${DB_DATABASE:-surat_digital}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app
+
+volumes:
+  app_storage:
+  app_cache:
+  postgres_data:
+
+networks:
+  app:
+    driver: bridge

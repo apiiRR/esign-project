@@ -404,10 +404,11 @@ function ApprovalPage() {
 }
 
 function ApprovalDetailPage() {
-    const { signatureRequest, letter, hasReadLetter, previewUrl } = usePage().props;
+    const { signatureRequest, letter, hasReadLetter, previewUrl, settings = {} } = usePage().props;
     const readForm = useForm({});
-    const approveForm = useForm({ note: "" });
-    const rejectForm = useForm({ note: "" });
+    const otpForm = useForm({});
+    const approveForm = useForm({ note: "", otp_code: "" });
+    const rejectForm = useForm({ note: "", otp_code: "" });
 
     if (!signatureRequest || !letter) {
         return <EmptyState message="Permintaan approval tidak ditemukan." />;
@@ -415,14 +416,17 @@ function ApprovalDetailPage() {
 
     const status = signatureStatusMeta(signatureRequest.status);
     const canAct = signatureRequest.status === "ready" && hasReadLetter;
+    const otpRequired = Boolean(settings?.signature_otp_enabled);
+    const approveOtpReady = !otpRequired || approveForm.data.otp_code.trim();
+    const rejectOtpReady = !otpRequired || rejectForm.data.otp_code.trim();
 
     const approve = () => {
-        if (!canAct || approveForm.processing) return;
+        if (!canAct || approveForm.processing || !approveOtpReady) return;
         approveForm.post(`/pegawai/approval/${signatureRequest.id}/approve`, { preserveScroll: true });
     };
 
     const reject = () => {
-        if (!canAct || rejectForm.processing || !rejectForm.data.note.trim()) return;
+        if (!canAct || rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady) return;
         rejectForm.post(`/pegawai/approval/${signatureRequest.id}/reject`, {
             preserveScroll: true,
             onSuccess: () => rejectForm.reset("note"),
@@ -432,6 +436,11 @@ function ApprovalDetailPage() {
     const markRead = () => {
         if (hasReadLetter || readForm.processing) return;
         readForm.post(`/pegawai/approval/${signatureRequest.id}/read`, { preserveScroll: true });
+    };
+
+    const sendOtp = () => {
+        if (!canAct || otpForm.processing) return;
+        otpForm.post(`/pegawai/approval/${signatureRequest.id}/otp`, { preserveScroll: true });
     };
 
     return (
@@ -491,9 +500,6 @@ function ApprovalDetailPage() {
 
                     {signatureRequest.status === "signed" ? (
                         <Panel title="Sudah Ditandatangani">
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                                Tanda tangan QR sudah disetujui dan ditempel ke PDF signed.
-                            </div>
                             <InfoGrid
                                 rows={[
                                     ["Tanggal tanda tangan", formatDate(signatureRequest.signed_at)],
@@ -501,6 +507,9 @@ function ApprovalDetailPage() {
                                     ["Status verifikasi", signatureRequest.verification_token ? "QR verifikasi tersedia" : "QR verifikasi belum tersedia"],
                                 ]}
                             />
+                            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                                Tanda tangan QR sudah disetujui dan ditempel ke PDF signed.
+                            </div>
                         </Panel>
                     ) : null}
 
@@ -532,6 +541,24 @@ function ApprovalDetailPage() {
                                 {approveForm.errors.signature || rejectForm.errors.signature}
                             </div>
                         ) : null}
+                        {otpRequired ? (
+                            <div className="mb-4 rounded-lg border border-sky-100 bg-sky-50 p-3">
+                                <div className="text-sm font-semibold text-sky-900">OTP diperlukan untuk approve atau reject.</div>
+                                <p className="mt-1 text-xs text-sky-800">Klik kirim OTP setelah dokumen ditandai sudah dibaca. Kode akan dikirim ke email Anda.</p>
+                                <button
+                                    type="button"
+                                    onClick={sendOtp}
+                                    disabled={!canAct || otpForm.processing}
+                                    className="mt-3 inline-flex items-center rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <Mail className="mr-2 h-4 w-4" />
+                                    {otpForm.processing ? "Mengirim OTP..." : "Kirim OTP"}
+                                </button>
+                                {otpForm.errors.otp || otpForm.errors.email ? (
+                                    <div className="mt-2 text-xs text-red-600">{otpForm.errors.otp || otpForm.errors.email}</div>
+                                ) : null}
+                            </div>
+                        ) : null}
                         <div className="mb-4">
                             <label className="text-sm font-semibold text-gray-800">Catatan persetujuan</label>
                             <textarea
@@ -543,10 +570,24 @@ function ApprovalDetailPage() {
                             />
                             {approveForm.errors.note ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.note}</div> : null}
                         </div>
+                        {otpRequired ? (
+                            <div className="mb-4">
+                                <label className="text-sm font-semibold text-gray-800">Kode OTP untuk persetujuan</label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={approveForm.data.otp_code}
+                                    onChange={(event) => approveForm.setData("otp_code", event.target.value)}
+                                    className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                    placeholder="Masukkan 6 digit OTP"
+                                />
+                                {approveForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.otp_code}</div> : null}
+                            </div>
+                        ) : null}
                         <button
                             type="button"
                             onClick={approve}
-                            disabled={!canAct || approveForm.processing}
+                            disabled={!canAct || approveForm.processing || !approveOtpReady}
                             className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300"
                         >
                             <CheckCheck className="mr-2 h-4 w-4" />
@@ -562,10 +603,24 @@ function ApprovalDetailPage() {
                                 placeholder="Wajib diisi jika menolak."
                             />
                             {rejectForm.errors.note ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.note}</div> : null}
+                            {otpRequired ? (
+                                <div className="mt-3">
+                                    <label className="text-sm font-semibold text-gray-800">Kode OTP untuk penolakan</label>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={rejectForm.data.otp_code}
+                                        onChange={(event) => rejectForm.setData("otp_code", event.target.value)}
+                                        className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                        placeholder="Masukkan 6 digit OTP"
+                                    />
+                                    {rejectForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.otp_code}</div> : null}
+                                </div>
+                            ) : null}
                             <button
                                 type="button"
                                 onClick={reject}
-                                disabled={!canAct || rejectForm.processing || !rejectForm.data.note.trim()}
+                                disabled={!canAct || rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady}
                                 className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
                             >
                                 Tolak
@@ -579,24 +634,34 @@ function ApprovalDetailPage() {
 }
 
 function SignatureApprovalPanel({ request }) {
-    const approveForm = useForm({ note: "" });
-    const rejectForm = useForm({ note: "" });
+    const { settings = {} } = usePage().props;
+    const otpForm = useForm({});
+    const approveForm = useForm({ note: "", otp_code: "" });
+    const rejectForm = useForm({ note: "", otp_code: "" });
     const status = signatureStatusMeta(request?.status);
     const canAct = request?.status === "ready";
+    const otpRequired = Boolean(settings?.signature_otp_enabled);
+    const approveOtpReady = !otpRequired || approveForm.data.otp_code.trim();
+    const rejectOtpReady = !otpRequired || rejectForm.data.otp_code.trim();
 
     if (!request) return null;
 
     const approve = () => {
-        if (!canAct || approveForm.processing) return;
+        if (!canAct || approveForm.processing || !approveOtpReady) return;
         approveForm.post(`/pegawai/approval/${request.id}/approve`, { preserveScroll: true });
     };
 
     const reject = () => {
-        if (!canAct || rejectForm.processing || !rejectForm.data.note.trim()) return;
+        if (!canAct || rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady) return;
         rejectForm.post(`/pegawai/approval/${request.id}/reject`, {
             preserveScroll: true,
             onSuccess: () => rejectForm.reset("note"),
         });
+    };
+
+    const sendOtp = () => {
+        if (!canAct || otpForm.processing) return;
+        otpForm.post(`/pegawai/approval/${request.id}/otp`, { preserveScroll: true });
     };
 
     return (
@@ -636,6 +701,24 @@ function SignatureApprovalPanel({ request }) {
             ) : null}
             {request.status === "ready" ? (
                 <div className="mt-4 space-y-4">
+                    {otpRequired ? (
+                        <div className="rounded-lg border border-sky-100 bg-sky-50 p-3">
+                            <div className="text-sm font-semibold text-sky-900">OTP diperlukan untuk approve atau reject.</div>
+                            <p className="mt-1 text-xs text-sky-800">Kode OTP dikirim ke email Anda dan berlaku 10 menit.</p>
+                            <button
+                                type="button"
+                                onClick={sendOtp}
+                                disabled={!canAct || otpForm.processing}
+                                className="mt-3 inline-flex items-center rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                <Mail className="mr-2 h-4 w-4" />
+                                {otpForm.processing ? "Mengirim OTP..." : "Kirim OTP"}
+                            </button>
+                            {otpForm.errors.otp || otpForm.errors.email ? (
+                                <div className="mt-2 text-xs text-red-600">{otpForm.errors.otp || otpForm.errors.email}</div>
+                            ) : null}
+                        </div>
+                    ) : null}
                     <div>
                         <label className="text-sm font-semibold text-gray-800">Catatan persetujuan</label>
                         <textarea
@@ -647,10 +730,24 @@ function SignatureApprovalPanel({ request }) {
                         />
                         {approveForm.errors.note ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.note}</div> : null}
                     </div>
+                    {otpRequired ? (
+                        <div>
+                            <label className="text-sm font-semibold text-gray-800">Kode OTP untuk persetujuan</label>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                value={approveForm.data.otp_code}
+                                onChange={(event) => approveForm.setData("otp_code", event.target.value)}
+                                className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                placeholder="Masukkan 6 digit OTP"
+                            />
+                            {approveForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.otp_code}</div> : null}
+                        </div>
+                    ) : null}
                     <button
                         type="button"
                         onClick={approve}
-                        disabled={approveForm.processing}
+                        disabled={approveForm.processing || !approveOtpReady}
                         className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                         <CheckCheck className="mr-2 h-4 w-4" />
@@ -666,10 +763,24 @@ function SignatureApprovalPanel({ request }) {
                             placeholder="Wajib diisi jika menolak."
                         />
                         {rejectForm.errors.note ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.note}</div> : null}
+                        {otpRequired ? (
+                            <div className="mt-3">
+                                <label className="text-sm font-semibold text-gray-800">Kode OTP untuk penolakan</label>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={rejectForm.data.otp_code}
+                                    onChange={(event) => rejectForm.setData("otp_code", event.target.value)}
+                                    className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                    placeholder="Masukkan 6 digit OTP"
+                                />
+                                {rejectForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.otp_code}</div> : null}
+                            </div>
+                        ) : null}
                         <button
                             type="button"
                             onClick={reject}
-                            disabled={rejectForm.processing || !rejectForm.data.note.trim()}
+                            disabled={rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady}
                             className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
                         >
                             Tolak

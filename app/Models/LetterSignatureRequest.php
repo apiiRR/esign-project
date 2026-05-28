@@ -49,4 +49,9 @@ class LetterSignatureRequest extends Model
     {
         return $this->belongsTo(User::class, 'signer_user_id');
     }
+
+    public function otps()
+    {
+        return $this->hasMany(LetterSignatureOtp::class);
+    }
 }

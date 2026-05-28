@@ -11,7 +11,7 @@ class NotificationController extends Controller
     public function index()
     {
         return inertia('Admin/Notifications/Index', [
-            'notifications' => NotificationLog::with(['user:id,name,username', 'letter:id,reference,subject'])
+            'notifications' => NotificationLog::with(['user:id,name,username', 'letter:id,reference,letter_number,subject'])
                 ->when(request()->q, fn ($query, $search) => $query->where(fn ($q) => $q
                     ->where('title', 'like', "%{$search}%")
                     ->orWhere('body', 'like', "%{$search}%")

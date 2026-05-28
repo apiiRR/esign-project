@@ -22,10 +22,35 @@ export default function NotificationsIndex() {
                         ]} />
                     </div>
                     <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
-                        <table className="min-w-[780px] divide-y divide-gray-200">
-                            <thead className="bg-gray-50"><tr>{["Waktu", "User", "Surat", "Channel", "Judul", "Status"].map((h) => <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">{h}</th>)}</tr></thead>
+                        <table className="w-full min-w-[980px] table-fixed divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="w-[16%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Waktu</th>
+                                    <th className="w-[18%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">User</th>
+                                    <th className="w-[16%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Surat</th>
+                                    <th className="w-[10%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Channel</th>
+                                    <th className="w-[28%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Judul</th>
+                                    <th className="w-[12%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Status</th>
+                                </tr>
+                            </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {(notifications.data || []).map((row) => <tr key={row.id}><td className="px-5 py-4 text-sm">{row.created_at}</td><td className="px-5 py-4 text-sm">{row.user?.name || "-"}</td><td className="px-5 py-4 text-sm">{row.letter?.reference || "-"}</td><td className="px-5 py-4 text-sm">{row.channel}</td><td className="px-5 py-4 text-sm break-words">{row.title}</td><td className="px-5 py-4 text-sm">{row.read_at ? "Dibaca" : "Belum dibaca"}</td></tr>)}
+                                {(notifications.data || []).map((row) => (
+                                    <tr key={row.id}>
+                                        <td className="w-[16%] px-5 py-4 text-sm text-gray-700">{row.created_at}</td>
+                                        <td className="w-[18%] px-5 py-4 text-sm text-gray-900">
+                                            <div className="min-w-0 break-words">{row.user?.name || "-"}</div>
+                                        </td>
+                                        <td className="w-[16%] px-5 py-4 text-sm text-gray-700">
+                                            <div className="min-w-0 break-words">{row.letter?.letter_number || row.letter?.reference || "-"}</div>
+                                        </td>
+                                        <td className="w-[10%] px-5 py-4 text-sm text-gray-700">{row.channel}</td>
+                                        <td className="w-[28%] px-5 py-4 text-sm text-gray-900">
+                                            <div className="min-w-0 break-words font-medium">{row.title}</div>
+                                            {row.body ? <div className="mt-1 min-w-0 break-words text-xs text-gray-500">{row.body}</div> : null}
+                                        </td>
+                                        <td className="w-[12%] px-5 py-4 text-sm text-gray-700">{row.read_at ? "Dibaca" : "Belum dibaca"}</td>
+                                    </tr>
+                                ))}
                             </tbody>
                         </table>
                     </div>

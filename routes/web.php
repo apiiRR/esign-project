@@ -99,6 +99,8 @@ Route::prefix('admin')->name('admin.')->group(function() {
         // route settings update
         Route::put('/settings', [App\Http\Controllers\Admin\SettingController::class, 'update'])
             ->name('settings.update');
+        Route::post('/settings/test-email', [App\Http\Controllers\Admin\SettingController::class, 'testEmail'])
+            ->name('settings.test-email');
 
         // route resource untuk permission
         Route::resource('/permissions', App\Http\Controllers\Admin\PermissionController::class)->except(['show']);
@@ -153,6 +155,9 @@ Route::prefix('pegawai')->name('pegawai.')->middleware('auth')->group(function()
 
     Route::post('/approval/{signatureRequest}/read', [App\Http\Controllers\Pegawai\PortalController::class, 'markApprovalRead'])
         ->name('approval.read');
+
+    Route::post('/approval/{signatureRequest}/otp', [App\Http\Controllers\Pegawai\PortalController::class, 'sendSignatureOtp'])
+        ->name('approval.otp');
 
     Route::post('/approval/{signatureRequest}/approve', [App\Http\Controllers\Pegawai\PortalController::class, 'approveSignature'])
         ->name('approval.approve');

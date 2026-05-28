@@ -6,7 +6,6 @@ use App\Models\Letter;
 use App\Models\LetterAttachment;
 use App\Models\LetterReadReceipt;
 use App\Models\LetterSignatureRequest;
-use App\Models\NotificationLog;
 use App\Models\Department;
 use App\Models\Directorate;
 use App\Models\Division;
@@ -22,6 +21,10 @@ use setasign\Fpdi\Fpdi;
 
 class LetterSignatureService
 {
+    public function __construct(private readonly NotificationDeliveryService $notifications)
+    {
+    }
+
     public function readyCountFor(User $user): int
     {
         return LetterSignatureRequest::query()
@@ -114,14 +117,12 @@ class LetterSignatureService
             $letter = $signatureRequest->letter;
             $letter->update(['signature_status' => 'rejected']);
 
-            NotificationLog::query()->create([
-                'user_id' => $letter->created_by,
-                'letter_id' => $letter->id,
-                'channel' => 'web',
-                'title' => 'Tanda tangan QR ditolak',
-                'body' => trim($user->name . ' menolak tanda tangan. ' . $note),
-                'sent_at' => now(),
-            ]);
+            $this->notifications->signature(
+                $letter->created_by,
+                $letter,
+                'Tanda tangan QR ditolak',
+                trim($user->name . ' menolak tanda tangan. ' . $note)
+            );
 
             return $signatureRequest->fresh(['letter', 'signer']);
         });
@@ -252,14 +253,12 @@ class LetterSignatureService
 
     private function notifySigner(LetterSignatureRequest $signatureRequest, Letter $letter): void
     {
-        NotificationLog::query()->create([
-            'user_id' => $signatureRequest->signer_user_id,
-            'letter_id' => $letter->id,
-            'channel' => 'web',
-            'title' => 'Approval tanda tangan QR',
-            'body' => 'Permintaan tanda tangan untuk ' . ($letter->letter_number ?: $letter->reference),
-            'sent_at' => now(),
-        ]);
+        $this->notifications->signature(
+            $signatureRequest->signer_user_id,
+            $letter,
+            'Approval tanda tangan QR',
+            'Permintaan tanda tangan untuk ' . ($letter->letter_number ?: $letter->reference)
+        );
     }
 
     private function notifyLetterRecipients(Letter $letter): void
@@ -270,14 +269,7 @@ class LetterSignatureService
             ->values();
 
         foreach ($targetUsers as $userId) {
-            NotificationLog::query()->create([
-                'user_id' => $userId,
-                'letter_id' => $letter->id,
-                'channel' => 'web',
-                'title' => 'Surat internal baru',
-                'body' => $letter->subject,
-                'sent_at' => now(),
-            ]);
+            $this->notifications->letter($userId, $letter, 'Surat internal baru', $letter->subject);
         }
     }
 

@@ -18,6 +18,8 @@ use App\Models\User;
 use App\Services\DispositionService;
 use App\Services\LetterFieldRequirementService;
 use App\Services\LetterSignatureService;
+use App\Services\NotificationDeliveryService;
+use App\Services\SignatureOtpService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -204,23 +206,42 @@ class PortalController extends Controller
         return back()->with('success', 'Dokumen ditandai sudah dibaca.');
     }
 
-    public function approveSignature(Request $request, LetterSignatureRequest $signatureRequest, LetterSignatureService $signatureService)
+    public function sendSignatureOtp(Request $request, LetterSignatureRequest $signatureRequest, SignatureOtpService $otpService, LetterSignatureService $signatureService)
+    {
+        $user = $request->user();
+        abort_unless((int) $signatureRequest->signer_user_id === (int) $user->id, 403);
+
+        $signatureRequest->load('letter');
+        if (! $signatureService->hasReadLetter($signatureRequest, $user)) {
+            throw ValidationException::withMessages(['otp' => 'Tandai dokumen sudah dibaca sebelum meminta OTP.']);
+        }
+
+        $otpService->send($signatureRequest, $user);
+
+        return back()->with('success', 'Kode OTP berhasil dikirim ke email Anda.');
+    }
+
+    public function approveSignature(Request $request, LetterSignatureRequest $signatureRequest, LetterSignatureService $signatureService, SignatureOtpService $otpService)
     {
         $validated = $request->validate([
             'note' => 'nullable|string|max:1000',
+            'otp_code' => 'nullable|string|max:20',
         ]);
 
+        $otpService->validateAndConsume($signatureRequest, $request->user(), $validated['otp_code'] ?? null);
         $signatureService->approve($signatureRequest, $request->user(), $validated['note'] ?? null);
 
         return back()->with('success', 'Tanda tangan QR berhasil disetujui.');
     }
 
-    public function rejectSignature(Request $request, LetterSignatureRequest $signatureRequest, LetterSignatureService $signatureService)
+    public function rejectSignature(Request $request, LetterSignatureRequest $signatureRequest, LetterSignatureService $signatureService, SignatureOtpService $otpService)
     {
         $validated = $request->validate([
             'note' => 'required|string|max:1000',
+            'otp_code' => 'nullable|string|max:20',
         ]);
 
+        $otpService->validateAndConsume($signatureRequest, $request->user(), $validated['otp_code'] ?? null);
         $signatureService->reject($signatureRequest, $request->user(), $validated['note']);
 
         return back()->with('success', 'Permintaan tanda tangan QR berhasil ditolak.');
@@ -324,14 +345,7 @@ class PortalController extends Controller
             ->values();
 
         foreach ($notificationUserIds as $userId) {
-            NotificationLog::query()->create([
-                'user_id' => $userId,
-                'letter_id' => $letter->id,
-                'channel' => 'web',
-                'title' => 'Surat dipublish',
-                'body' => $letter->subject,
-                'sent_at' => now(),
-            ]);
+            app(NotificationDeliveryService::class)->letter($userId, $letter, 'Surat dipublish', $letter->subject);
         }
 
         return back()->with('success', 'Surat masuk eksternal berhasil dipublish.');
@@ -735,14 +749,7 @@ class PortalController extends Controller
                     ->values();
 
                 foreach ($notificationUserIds as $userId) {
-                    NotificationLog::query()->create([
-                        'user_id' => $userId,
-                        'letter_id' => $letter->id,
-                        'channel' => 'web',
-                        'title' => 'Surat internal baru',
-                        'body' => $letter->subject,
-                        'sent_at' => now(),
-                    ]);
+                    app(NotificationDeliveryService::class)->letter($userId, $letter, 'Surat internal baru', $letter->subject);
                 }
             }
 

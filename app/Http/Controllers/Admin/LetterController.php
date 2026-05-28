@@ -12,11 +12,11 @@ use App\Models\LetterAttachment;
 use App\Models\LetterReadReceipt;
 use App\Models\LetterTarget;
 use App\Models\LetterType;
-use App\Models\NotificationLog;
 use App\Models\User;
 use App\Services\DispositionService;
 use App\Services\LetterFieldRequirementService;
 use App\Services\LetterSignatureService;
+use App\Services\NotificationDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -206,14 +206,7 @@ class LetterController extends Controller
                     ->values();
 
                 foreach ($notificationUserIds as $userId) {
-                    NotificationLog::create([
-                        'user_id' => $userId,
-                        'letter_id' => $letter->id,
-                        'channel' => 'web',
-                        'title' => 'Surat internal baru',
-                        'body' => $letter->subject,
-                        'sent_at' => now(),
-                    ]);
+                    app(NotificationDeliveryService::class)->letter($userId, $letter, 'Surat internal baru', $letter->subject);
                 }
             }
 

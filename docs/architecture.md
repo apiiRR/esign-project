@@ -46,7 +46,7 @@ Admin mengelola:
 - Notifikasi.
 - Setting aplikasi.
 - Permission, role, user.
-- Template surat dan jenis surat.
+- Jenis surat.
 
 ### Pegawai
 
@@ -92,7 +92,7 @@ Karena Inertia dipakai langsung, validasi backend Laravel akan otomatis mengirim
 - `app/Models`
   Model Eloquent untuk user, organisasi, surat, target, disposisi, notifikasi, setting.
 - `app/Services`
-  Logic domain yang dipakai berulang, seperti nomor surat, disposisi, dan konfigurasi wajib field.
+  Logic domain yang dipakai berulang, seperti disposisi dan konfigurasi wajib field.
 
 ### Frontend
 

@@ -21,7 +21,6 @@ class SettingTableSeeder extends Seeder
             'company_name' => 'PT Berdikari',
             'company_code' => 'BDK',
             'company_logo' => null,
-            'enable_letter_template_method' => false,
             'letter_field_requirements' => json_encode(app(LetterFieldRequirementService::class)->defaults()),
             'created_at' => now(),
             'updated_at' => now(),

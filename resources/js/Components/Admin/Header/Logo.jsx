@@ -1,8 +1,7 @@
 // import Link dari Inertia
 import { Link } from "@inertiajs/react";
 
-// import icon dari lucide-react
-import { Files } from "lucide-react";
+import ApplicationLogo from "@/Components/ApplicationLogo";
 
 export default function Logo() {
     
@@ -13,8 +12,8 @@ export default function Logo() {
                     <div className="bg-white rounded-xl border border-gray-200 p-1 shadow-sm">
                         <div className="relative">
                             <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-blue-100 rounded-lg"></div>
-                            <div className="relative w-10 h-10 flex items-center justify-center">
-                                <Files size={26} className="text-emerald-700" />
+                            <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
+                                <ApplicationLogo className="h-10 w-10" iconClassName="h-6 w-6" />
                             </div>
                         </div>
                     </div>

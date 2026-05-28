@@ -1,8 +1,8 @@
 import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
-import NotaDinasPreview from "@/Pages/Admin/LetterTemplates/Components/NotaDinasPreview";
 import FormErrorSummary from "@/Shared/FormErrorSummary";
+import PdfSignaturePlacement from "@/Components/PdfSignaturePlacement";
 import { Archive, Plus, Send, Trash2, Upload } from "lucide-react";
 
 const MAX_PDF_SIZE = 10 * 1024 * 1024;
@@ -11,52 +11,37 @@ export default function LetterForm() {
     const pageProps = usePage().props;
     const {
         type,
-        templates = [],
         letterTypes = [],
         targetOptions = {},
         auth,
         isArchive = false,
-        templateEnabled = false,
         errors: serverErrors = {},
     } = pageProps;
     const isIncomingExternal = type === "incoming_external" && !isArchive;
     const isInternal = type === "internal";
     const isOutgoing = type === "outgoing";
     const supportsDraftSend = isInternal || isOutgoing;
-    const context = isArchive ? "archive" : type;
-    const today = new Date().toLocaleDateString("id-ID", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-    });
     const originOptions = internalOriginOptions(auth?.user);
     const defaultOrigin = originOptions[0] || { type: "", id: "", name: "" };
     const [recipientDraft, setRecipientDraft] = useState({ target_type: "department", target_id: "" });
     const [ccDraft, setCcDraft] = useState({ target_type: "department", target_id: "" });
-    const [letterNumberTouched, setLetterNumberTouched] = useState(false);
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [clientErrors, setClientErrors] = useState([]);
+    const [signaturePlacementActive, setSignaturePlacementActive] = useState(false);
 
     const { data, setData, errors } = useForm({
         type,
         is_archive: isArchive,
         submit_action: "send",
-        creation_method: "scan",
         letter_type_id: "",
-        letter_template_id: templates[0]?.id || "",
         letter_number: "",
         subject: "",
-        body_rendered: "",
-        page_count: 1,
         scan_file: null,
         targets: [],
         cc_targets: [],
+        signature_requests: [],
         payload: {
-            recipients: "",
-            cc: "",
-            sender: auth?.user?.position || auth?.user?.name || "",
-            letter_date: today,
             origin_name: "",
             internal_origin_type: defaultOrigin.type,
             internal_origin_id: defaultOrigin.rawId,
@@ -67,62 +52,12 @@ export default function LetterForm() {
     });
     const formErrors = { ...serverErrors, ...errors };
 
-    const compatibleTemplates = templates.filter((template) =>
-        isOutgoing ? ["outgoing", "both"].includes(template.category) : ["internal", "both"].includes(template.category),
-    );
-    const selectedTemplate = compatibleTemplates.find((template) => String(template.id) === String(data.letter_template_id)) || compatibleTemplates[0];
-    const selectedLetterType = letterTypes.find((letterType) => String(letterType.id) === String(data.letter_type_id));
-    const numberingActive = Boolean(!isIncomingExternal && selectedLetterType?.numbering_enabled && (selectedLetterType.numbering_contexts || []).includes(context));
-
-    useEffect(() => {
-        if (compatibleTemplates.length && !compatibleTemplates.some((template) => String(template.id) === String(data.letter_template_id))) {
-            setData("letter_template_id", compatibleTemplates[0].id);
-            return;
-        }
-
-        if ((!(isInternal || isOutgoing) || !templateEnabled) && data.creation_method !== "scan") {
-            setData("creation_method", "scan");
-            return;
-        }
-
-        if (selectedTemplate && data.creation_method === "template" && !data.body_rendered) {
-            setData("body_rendered", selectedTemplate.content_template || "");
-        }
-    }, [selectedTemplate?.id, data.creation_method, isInternal, isOutgoing, templateEnabled]);
-
     useEffect(() => () => {
         if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
     }, [pdfPreviewUrl]);
 
-    useEffect(() => {
-        if (!numberingActive || !data.letter_type_id || letterNumberTouched) return;
-
-        const params = new URLSearchParams();
-        params.set("letter_type_id", data.letter_type_id);
-        params.set("context", context);
-        Object.entries(data.payload || {}).forEach(([key, value]) => {
-            if (value !== null && value !== undefined && value !== "") params.set(`payload[${key}]`, value);
-        });
-
-        fetch(`/admin/nomor-surat/preview?${params.toString()}`, { headers: { Accept: "application/json" } })
-            .then((response) => response.json())
-            .then((result) => {
-                if (result.letter_number) setData("letter_number", result.letter_number);
-            })
-            .catch(() => {});
-    }, [numberingActive, data.letter_type_id, data.payload?.internal_origin_type, data.payload?.internal_origin_id, context, letterNumberTouched]);
-
     function updatePayload(key, value) {
         setData("payload", { ...data.payload, [key]: value });
-    }
-
-    function updateMethod(method) {
-        if ((!(isInternal || isOutgoing) || !templateEnabled) && method !== "scan") return;
-        setData({ ...data, creation_method: method, scan_file: method === "template" ? null : data.scan_file, page_count: method === "template" ? data.page_count : 1 });
-        if (method === "template" && pdfPreviewUrl) {
-            URL.revokeObjectURL(pdfPreviewUrl);
-            setPdfPreviewUrl("");
-        }
     }
 
     function handleFile(file) {
@@ -158,6 +93,52 @@ export default function LetterForm() {
         setPdfPreviewUrl(URL.createObjectURL(file));
     }
 
+    function normalizeSignatureRequests(requests) {
+        return requests
+            .map((request, index) => ({ ...request, signing_order: index + 1 }))
+            .sort((first, second) => first.signing_order - second.signing_order);
+    }
+
+    function addSignatureRequest(placement) {
+        if (!isInternal || !pdfPreviewUrl || !signaturePlacementActive) return;
+        const signer = (targetOptions.users || [])[0];
+
+        setData("signature_requests", normalizeSignatureRequests([
+            ...data.signature_requests,
+            {
+                local_id: `${Date.now()}-${data.signature_requests.length}`,
+                signer_user_id: signer?.id || "",
+                signing_order: data.signature_requests.length + 1,
+                page_number: placement.page_number,
+                x: placement.x,
+                y: placement.y,
+                width: placement.width,
+                height: placement.height,
+            },
+        ]));
+        setSignaturePlacementActive(false);
+    }
+
+    function updateSignatureRequest(localId, values) {
+        setData("signature_requests", data.signature_requests.map((request) => (
+            request.local_id === localId ? { ...request, ...values } : request
+        )));
+    }
+
+    function removeSignatureRequest(localId) {
+        setData("signature_requests", normalizeSignatureRequests(data.signature_requests.filter((request) => request.local_id !== localId)));
+    }
+
+    function moveSignatureRequest(localId, nextOrder) {
+        const currentIndex = data.signature_requests.findIndex((request) => request.local_id === localId);
+        if (currentIndex < 0) return;
+
+        const reordered = [...data.signature_requests];
+        const [item] = reordered.splice(currentIndex, 1);
+        reordered.splice(Math.max(0, Number(nextOrder) - 1), 0, item);
+        setData("signature_requests", normalizeSignatureRequests(reordered));
+    }
+
     function addTarget(kind) {
         const draft = kind === "recipient" ? recipientDraft : ccDraft;
         if (!draft.target_id) return;
@@ -174,9 +155,15 @@ export default function LetterForm() {
 
     function submit(event, action = "send") {
         event.preventDefault();
-        if (clientErrors.length) {
-            window.alert(clientErrors[0]);
-            return;
+        setClientErrors([]);
+        if (isInternal) {
+            const invalidSignature = data.signature_requests.find((request) => !request.signer_user_id);
+            if (invalidSignature) {
+                const message = "Pilih signer untuk semua titik tanda tangan.";
+                setClientErrors([message]);
+                window.alert(message);
+                return;
+            }
         }
         setSubmitting(true);
         router.post("/admin/surat", { ...data, submit_action: action }, {
@@ -185,7 +172,6 @@ export default function LetterForm() {
             onError: (validationErrors) => {
                 const messages = Object.values(validationErrors || {}).flat().filter(Boolean);
                 const message = messages[0] || "Form gagal disimpan. Periksa kembali input yang wajib diisi.";
-                setClientErrors(messages);
                 window.alert(message);
             },
             onFinish: () => setSubmitting(false),
@@ -197,17 +183,8 @@ export default function LetterForm() {
         ? "Upload scan surat untuk disimpan sebagai arsip sistem."
         : isIncomingExternal
           ? "Input metadata surat dari pihak luar dan upload scan PDF."
-          : "Pilih metode scan surat atau buat Nota Dinas dari template.";
+          : "Input metadata surat dan upload scan PDF.";
     const backUrl = isArchive ? "/admin/surat/arsip" : isIncomingExternal ? "/admin/surat/masuk-eksternal" : isOutgoing ? "/admin/surat/keluar" : "/admin/surat/internal";
-    const metadata = {
-        letter_number: data.letter_number,
-        recipients: data.payload.recipients || targetLabels(data.targets, targetOptions).join("\n"),
-        cc: data.payload.cc || targetLabels(data.cc_targets, targetOptions).join("\n"),
-        sender: data.payload.sender,
-        subject: data.subject,
-        letter_date: data.payload.letter_date,
-        page_count: data.page_count,
-    };
 
     return (
         <>
@@ -223,66 +200,54 @@ export default function LetterForm() {
 
                     <div className="grid gap-6 xl:grid-cols-12">
                         <div className="min-w-0 space-y-5 xl:col-span-6">
-                            <Card>
-                                <div className={`grid gap-3 ${(isInternal || isOutgoing) && templateEnabled ? "md:grid-cols-2" : "md:grid-cols-1"}`}>
-                                    <MethodButton active={data.creation_method === "scan"} title="Scan Surat" description="Upload surat final dalam format PDF." onClick={() => updateMethod("scan")} />
-                                    {(isInternal || isOutgoing) && templateEnabled ? (
-                                        <MethodButton active={data.creation_method === "template"} title="Buat dari Template" description="Gunakan format Nota Dinas dan hitung jumlah halaman." onClick={() => updateMethod("template")} />
-                                    ) : null}
-                                </div>
-                                {(isInternal || isOutgoing) && !templateEnabled ? <p className="mt-3 text-xs font-medium text-gray-500">Metode buat dari template sedang dinonaktifkan oleh admin.</p> : null}
-                            </Card>
-
                             <Card className="space-y-4">
-                                <Select label="Jenis Surat" value={data.letter_type_id} onChange={(value) => { setLetterNumberTouched(false); setData("letter_type_id", value); }} options={letterTypes.map((letterType) => ({ id: letterType.id, name: `${letterType.name}${letterType.code ? ` (${letterType.code})` : ""}` }))} error={formErrors.letter_type_id} />
-                                <Field label="Nomor Surat" value={data.letter_number} onChange={(value) => { setLetterNumberTouched(true); setData("letter_number", value); }} error={formErrors.letter_number} placeholder={isIncomingExternal ? "Masukkan nomor surat dari dokumen eksternal" : numberingActive ? "Nomor otomatis akan diisi setelah jenis dan asal surat dipilih" : "Opsional"} />
-                                {numberingActive ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-800">Nomor otomatis aktif dan akan dibooking saat draft/send.</div> : null}
+                                <Select label="Jenis Surat" value={data.letter_type_id} onChange={(value) => setData("letter_type_id", value)} options={letterTypes.map((letterType) => ({ id: letterType.id, name: letterType.name }))} error={formErrors.letter_type_id} />
+                                <Field label="Nomor Surat" value={data.letter_number} onChange={(value) => setData("letter_number", value)} error={formErrors.letter_number} placeholder={isIncomingExternal ? "Masukkan nomor surat dari dokumen eksternal" : "Opsional"} />
                                 <Field label="Perihal" value={data.subject} onChange={(value) => setData("subject", value)} error={formErrors.subject} placeholder="Perihal surat" />
                                 {isInternal || isOutgoing ? <Select label="Asal Surat" value={`${data.payload.internal_origin_type}:${data.payload.internal_origin_id}`} onChange={(value) => {
                                     const selected = originOptions.find((option) => option.id === value);
                                     if (!selected) return;
                                     setData("payload", { ...data.payload, internal_origin_type: selected.type, internal_origin_id: selected.rawId, internal_origin_name: selected.name });
-                                    setLetterNumberTouched(false);
                                 }} options={originOptions} error={formErrors["payload.internal_origin_type"] || formErrors["payload.internal_origin_id"]} noPlaceholder /> : null}
                                 {isOutgoing ? <Field label="Tujuan Eksternal" value={data.payload.external_recipient} onChange={(value) => updatePayload("external_recipient", value)} error={formErrors["payload.external_recipient"]} placeholder="Nama perusahaan/instansi penerima" /> : null}
                                 {isIncomingExternal ? <Field label="Asal Surat" value={data.payload.origin_name} onChange={(value) => updatePayload("origin_name", value)} error={formErrors["payload.origin_name"]} placeholder="Nama instansi/perusahaan pengirim" /> : null}
                                 {isIncomingExternal || isArchive ? <Textarea label="Catatan" value={data.payload.notes} onChange={(value) => updatePayload("notes", value)} rows={4} error={formErrors["payload.notes"]} placeholder="Catatan tambahan" /> : null}
                             </Card>
 
-                            {isInternal ? (
+                            {isInternal || isOutgoing ? (
                                 <>
-                                    <TargetPicker title="Tujuan" draft={recipientDraft} setDraft={setRecipientDraft} targets={data.targets} field="targets" targetOptions={targetOptions} onAdd={() => addTarget("recipient")} onRemove={removeTarget} error={formErrors.targets} />
+                                    {isInternal ? <TargetPicker title="Tujuan" draft={recipientDraft} setDraft={setRecipientDraft} targets={data.targets} field="targets" targetOptions={targetOptions} onAdd={() => addTarget("recipient")} onRemove={removeTarget} error={formErrors.targets} /> : null}
                                     <TargetPicker title="Tembusan" draft={ccDraft} setDraft={setCcDraft} targets={data.cc_targets} field="cc_targets" targetOptions={targetOptions} onAdd={() => addTarget("cc")} onRemove={removeTarget} />
                                 </>
                             ) : null}
 
-                            {data.creation_method === "scan" ? (
-                                <Card>
-                                    <label className="block text-sm font-semibold text-gray-900">File Scan PDF</label>
-                                    <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5">
-                                        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-                                            <Upload className="h-5 w-5 shrink-0 text-gray-500" />
-                                            <div className="min-w-0 flex-1">
-                                                <input type="file" accept="application/pdf,.pdf" onChange={(event) => handleFile(event.target.files?.[0] || null)} className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white" />
-                                                <div className="mt-2 text-xs text-gray-500">Hanya file PDF, maksimal 10MB.</div>
-                                            </div>
+                            <Card>
+                                <label className="block text-sm font-semibold text-gray-900">File Scan PDF</label>
+                                <div className="mt-3 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5">
+                                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+                                        <Upload className="h-5 w-5 shrink-0 text-gray-500" />
+                                        <div className="min-w-0 flex-1">
+                                            <input type="file" accept="application/pdf,.pdf" onChange={(event) => handleFile(event.target.files?.[0] || null)} className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white" />
+                                            <div className="mt-2 text-xs text-gray-500">Hanya file PDF, maksimal 10MB.</div>
                                         </div>
                                     </div>
-                                    {formErrors.scan_file ? <p className="mt-2 text-xs text-red-600">{formErrors.scan_file}</p> : null}
-                                </Card>
-                            ) : (
-                                <Card className="space-y-4">
-                                    <Select label="Template" value={data.letter_template_id || compatibleTemplates[0]?.id || ""} onChange={(value) => setData("letter_template_id", value)} options={compatibleTemplates.map((template) => ({ id: template.id, name: template.name }))} error={formErrors.letter_template_id} noPlaceholder />
-                                    <Textarea label="Kepada Yth" value={data.payload.recipients} onChange={(value) => updatePayload("recipients", value)} placeholder="Kosongkan untuk memakai daftar tujuan" />
-                                    <Textarea label="Tembusan" value={data.payload.cc} onChange={(value) => updatePayload("cc", value)} placeholder="Kosongkan untuk memakai daftar tembusan" />
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        <Field label="Dari" value={data.payload.sender} onChange={(value) => updatePayload("sender", value)} />
-                                        <Field label="Tanggal" value={data.payload.letter_date} onChange={(value) => updatePayload("letter_date", value)} />
-                                    </div>
-                                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">Jumlah halaman: {data.page_count || 1}</div>
-                                    <Textarea label="Isi Nota Dinas" value={data.body_rendered} onChange={(value) => setData("body_rendered", value)} rows={8} error={formErrors.body_rendered} />
-                                </Card>
-                            )}
+                                </div>
+                                {formErrors.scan_file ? <p className="mt-2 text-xs text-red-600">{formErrors.scan_file}</p> : null}
+                            </Card>
+
+                            {isInternal ? (
+                                <SignatureRequestPanel
+                                    requests={data.signature_requests}
+                                    signerOptions={targetOptions.users || []}
+                                    onUpdate={updateSignatureRequest}
+                                    onRemove={removeSignatureRequest}
+                                    onMove={moveSignatureRequest}
+                                    placementActive={signaturePlacementActive}
+                                    setPlacementActive={setSignaturePlacementActive}
+                                    pdfReady={Boolean(pdfPreviewUrl)}
+                                    errors={formErrors}
+                                />
+                            ) : null}
 
                             <div className="flex flex-wrap justify-end gap-3">
                                 {supportsDraftSend ? <button type="button" disabled={submitting} onClick={(event) => submit(event, "draft")} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"><Archive className="mr-2 h-4 w-4" />{submitting ? "Menyimpan..." : "Simpan Draft"}</button> : null}
@@ -295,12 +260,21 @@ export default function LetterForm() {
                             <div className="sticky top-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                                 <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
                                     <div className="text-sm font-semibold text-gray-950">Preview</div>
-                                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">{data.creation_method === "template" ? `${data.page_count || 1} halaman` : "PDF"}</span>
+                                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">PDF</span>
                                 </div>
-                                {data.creation_method === "scan" ? (
-                                    pdfPreviewUrl ? <iframe title="Preview PDF" src={pdfPreviewUrl} className="h-[520px] md:h-[720px] w-full bg-gray-100" /> : <div className="flex h-[520px] md:h-[720px] items-center justify-center bg-gray-50 px-5 text-center text-sm text-gray-500">Pilih file PDF untuk melihat preview.</div>
+                                {isInternal ? (
+                                    <PdfSignaturePlacement
+                                        fileUrl={pdfPreviewUrl}
+                                        requests={data.signature_requests}
+                                        placementActive={signaturePlacementActive}
+                                        onAdd={addSignatureRequest}
+                                        onUpdate={updateSignatureRequest}
+                                        onPlacementComplete={() => setSignaturePlacementActive(false)}
+                                    />
+                                ) : pdfPreviewUrl ? (
+                                    <iframe title="Preview PDF" src={pdfPreviewUrl} className="h-[520px] md:h-[720px] w-full bg-gray-100" />
                                 ) : (
-                                    <NotaDinasPreview html={data.body_rendered} metadata={metadata} onPageCountChange={(count) => data.page_count !== count && setData("page_count", count)} className="h-[520px] md:h-[720px]" />
+                                    <div className="flex h-[520px] md:h-[720px] items-center justify-center bg-gray-50 px-5 text-center text-sm text-gray-500">Pilih file PDF untuk melihat preview.</div>
                                 )}
                             </div>
                         </div>
@@ -313,10 +287,6 @@ export default function LetterForm() {
 
 function Card({ children, className = "" }) {
     return <div className={`min-w-0 rounded-lg border border-gray-200 bg-white p-5 shadow-sm ${className}`}>{children}</div>;
-}
-
-function MethodButton({ active, title, description, onClick }) {
-    return <button type="button" onClick={onClick} className={`min-w-0 rounded-lg border px-4 py-3 text-left ${active ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}><div className="font-semibold">{title}</div><div className="mt-1 text-xs text-gray-500">{description}</div></button>;
 }
 
 function TargetPicker({ title, draft, setDraft, targets, field, targetOptions, onAdd, onRemove, error }) {
@@ -356,6 +326,79 @@ function TargetPicker({ title, draft, setDraft, targets, field, targetOptions, o
     );
 }
 
+function SignatureRequestPanel({ requests, signerOptions, onUpdate, onRemove, onMove, placementActive, setPlacementActive, pdfReady, errors }) {
+    return (
+        <Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <h2 className="text-sm font-semibold text-gray-950">Tanda Tangan QR</h2>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                        Klik tombol tambah, lalu klik halaman PDF di kanan. Sistem akan mendeteksi halaman tanda tangan otomatis.
+                    </p>
+                </div>
+            </div>
+            <button
+                type="button"
+                disabled={!pdfReady}
+                onClick={() => setPlacementActive(!placementActive)}
+                className={`mt-4 inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                    placementActive
+                        ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                        : "bg-emerald-700 text-white hover:bg-emerald-800"
+                }`}
+            >
+                {placementActive ? "Batal tambah titik" : "Tambah titik tanda tangan"}
+            </button>
+            {!pdfReady ? (
+                <div className="mt-2 text-xs text-gray-500">Upload PDF dulu untuk mengaktifkan penempatan tanda tangan.</div>
+            ) : placementActive ? (
+                <div className="mt-2 text-xs text-amber-700">Mode tambah aktif. Klik satu posisi di preview PDF. Setelah titik dibuat, mode akan mati agar PDF bisa discroll lagi.</div>
+            ) : (
+                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal. Aktifkan tombol tambah titik hanya saat ingin menandai posisi tanda tangan.</div>
+            )}
+
+            {errors.signature_requests ? <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{errors.signature_requests}</div> : null}
+
+            <div className="mt-4 space-y-3">
+                {requests.length ? requests.map((request, index) => (
+                    <div key={request.local_id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <div className="grid gap-3 md:grid-cols-[90px_1fr_110px_auto] md:items-end">
+                            <label className="text-xs font-semibold text-gray-600">
+                                Urutan
+                                <select value={request.signing_order} onChange={(event) => onMove(request.local_id, event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                                    {requests.map((_, orderIndex) => <option key={orderIndex + 1} value={orderIndex + 1}>{orderIndex + 1}</option>)}
+                                </select>
+                            </label>
+                            <label className="text-xs font-semibold text-gray-600">
+                                Signer
+                                <select value={request.signer_user_id || ""} onChange={(event) => onUpdate(request.local_id, { signer_user_id: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
+                                    <option value="">Pilih signer</option>
+                                    {signerOptions.map((user) => <option key={user.id} value={user.id}>{user.name}{user.position ? ` - ${user.position}` : ""}</option>)}
+                                </select>
+                            </label>
+                            <div className="text-xs font-semibold text-gray-600">
+                                Halaman
+                                <div className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800">
+                                    {request.page_number}
+                                </div>
+                            </div>
+                            <button type="button" onClick={() => onRemove(request.local_id)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Hapus</button>
+                        </div>
+                        <div className="mt-2 text-xs text-gray-500">
+                            Posisi: {(request.x * 100).toFixed(1)}%, {(request.y * 100).toFixed(1)}% · Ukuran: {(request.width * 100).toFixed(1)}% x {(request.height * 100).toFixed(1)}%
+                        </div>
+                        {errors[`signature_requests.${index}.signer_user_id`] ? <div className="mt-2 text-xs text-red-600">{errors[`signature_requests.${index}.signer_user_id`]}</div> : null}
+                    </div>
+                )) : (
+                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                        Belum ada titik tanda tangan. Upload PDF lalu klik area preview untuk menambah titik.
+                    </div>
+                )}
+            </div>
+        </Card>
+    );
+}
+
 function Field({ label, value, onChange, error, placeholder }) {
     return <label className="block min-w-0"><span className="text-sm font-semibold text-gray-900">{label}</span><input value={value || ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className={`mt-2 w-full min-w-0 rounded-lg border px-3 py-2.5 text-sm outline-none focus:border-emerald-600 ${error ? "border-red-500" : "border-gray-300"}`} />{error ? <span className="mt-1 block text-xs text-red-600">{error}</span> : null}</label>;
 }
@@ -377,10 +420,6 @@ function optionsByType(type, options) {
 
 function targetLabel(target, options) {
     return optionsByType(target.target_type, options).find((option) => String(option.id) === String(target.target_id))?.label || `${target.target_type}: ${target.target_id}`;
-}
-
-function targetLabels(targets, options) {
-    return (targets || []).map((target) => targetLabel(target, options));
 }
 
 function internalOriginOptions(user) {

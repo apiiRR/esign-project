@@ -91,31 +91,10 @@ Menyimpan master jenis surat.
 
 Field penting:
 
-- `name`, `code`, `description`.
-- `numbering_enabled`: apakah nomor otomatis aktif.
-- `numbering_contexts`: konteks yang memakai nomor otomatis.
-- `numbering_format`: template format nomor.
+- `name`, `description`.
 - `status`.
 
 Model: `App\Models\LetterType`
-
-Relasi:
-
-- `letters()`
-
-### `letter_templates`
-
-Menyimpan template Nota Dinas.
-
-Field penting:
-
-- `name`, `description`.
-- `category`: internal, outgoing, atau both.
-- `content_template`: HTML/template isi.
-- `extra_fields`: field tambahan.
-- `status`.
-
-Model: `App\Models\LetterTemplate`
 
 Relasi:
 
@@ -128,8 +107,7 @@ Tabel utama semua surat.
 Field penting:
 
 - `type`: incoming_external, outgoing, internal, dan secara kode baru juga dipakai untuk archive.
-- `creation_method`: scan atau template.
-- `letter_type_id`, `letter_template_id`.
+- `letter_type_id`.
 - `created_by`: user pembuat.
 - `origin_directorate_id`, `origin_division_id`, `origin_department_id`.
 - `title`, `subject`.
@@ -137,7 +115,6 @@ Field penting:
 - `reference`: ID internal aplikasi, contoh `BDK-OUT-...`.
 - `page_count`.
 - `status`: draft, sent, received, disposed, archived, rejected.
-- `body_rendered`: HTML hasil template.
 - `payload`: metadata tambahan.
 - `meta`: metadata teknis.
 
@@ -146,7 +123,6 @@ Model: `App\Models\Letter`
 Relasi:
 
 - `creator()`
-- `template()`
 - `letterType()`
 - `targets()`
 - `attachments()`
@@ -285,7 +261,6 @@ Field penting:
 - `company_name`
 - `company_code`
 - `company_logo`
-- `enable_letter_template_method`
 - `letter_field_requirements`
 
 Model: `App\Models\Setting`

@@ -1,11 +1,30 @@
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
-import NotaDinasPreview from "@/Pages/Admin/LetterTemplates/Components/NotaDinasPreview";
 import { Download, Paperclip, Save, Send, Trash2 } from "lucide-react";
+
+function formatInputDate(value) {
+    if (!value) return "-";
+    return new Intl.DateTimeFormat("id-ID", {
+        weekday: "long",
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+    }).format(new Date(value));
+}
+
+function formatInputTime(value) {
+    if (!value) return "-";
+    return new Intl.DateTimeFormat("id-ID", {
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(new Date(value));
+}
 
 export default function LetterShow() {
     const { letter, notifications, targetOptions = {}, dispositionTargetOptions = {}, auth } = usePage().props;
     const isIncomingExternal = letter.type === "incoming_external";
+    const isInternal = letter.type === "internal";
+    const isOutgoing = letter.type === "outgoing";
     const { data, setData, put, processing } = useForm({
         status: letter.status,
         letter_number: letter.letter_number || "",
@@ -28,16 +47,6 @@ export default function LetterShow() {
             onSuccess: () => dispositionForm.reset("target_id", "note"),
         });
     };
-    const notaMetadata = {
-        ...(letter.payload || {}),
-        letter_number: letter.letter_number,
-        recipients: letter.payload?.recipients,
-        cc: letter.payload?.cc,
-        sender: letter.payload?.sender,
-        subject: letter.subject,
-        letter_date: letter.payload?.letter_date,
-        page_count: letter.page_count,
-    };
     const canDeleteDraft = letter.status === "draft" && String(letter.created_by) === String(auth?.user?.id);
 
     return (
@@ -48,7 +57,7 @@ export default function LetterShow() {
                     <div className="space-y-6 xl:col-span-2">
                         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                             <h1 className="text-2xl font-bold text-gray-950">{letter.subject}</h1>
-                            <p className="mt-2 text-sm text-gray-500">{isIncomingExternal ? (letter.letter_number || "-") : letter.reference} · {letter.letter_type?.name || "Tanpa jenis"} · {letter.type} · {letter.creation_method} · {letter.page_count || 1} halaman</p>
+                            <p className="mt-2 text-sm text-gray-500">{isIncomingExternal ? (letter.letter_number || "-") : letter.reference} · {letter.letter_type?.name || "Tanpa jenis"} · {letter.type} · {letter.page_count || 1} halaman</p>
                         </div>
                         {canDeleteDraft ? (
                             <div className="flex justify-end">
@@ -64,24 +73,22 @@ export default function LetterShow() {
                                 </button>
                             </div>
                         ) : null}
-                        {letter.creation_method === "template" ? (
-                            <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-300 shadow-sm">
-                                <NotaDinasPreview html={letter.body_rendered} metadata={notaMetadata} />
-                            </div>
-                        ) : letter.attachments?.[0] ? (
+                        {letter.attachments?.[0] ? (
                             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                                 <iframe title="Preview PDF" src={`/storage/${letter.attachments[0].file_path}`} className="h-[520px] md:h-[720px] w-full bg-gray-100" />
                             </div>
                         ) : (
                             <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: letter.body_rendered || "<p>Belum ada isi surat.</p>" }} />
+                                <div className="text-sm text-gray-500">Belum ada file scan PDF.</div>
                             </div>
                         )}
                         <AttachmentPanel attachments={letter.attachments || []} />
                         <Panel title="Informasi Surat" rows={[
                             ["Nomor Surat", letter.letter_number || "-"],
                             ["Jenis Surat", letter.letter_type?.name || "-"],
-                            ["Pembuat", letter.creator?.name || "-"],
+                            ["Diinput oleh", letter.creator?.name || "-"],
+                            ["Tanggal input", formatInputDate(letter.created_at)],
+                            ["Jam input", formatInputTime(letter.created_at)],
                             ...(!isIncomingExternal ? [["Status", letter.status]] : []),
                             ...(letter.payload?.origin_name ? [["Asal Surat", letter.payload.origin_name]] : []),
                             ...(letter.payload?.internal_origin_name ? [["Asal Surat", letter.payload.internal_origin_name]] : []),
@@ -89,12 +96,20 @@ export default function LetterShow() {
                             ...(letter.payload?.notes ? [["Catatan", letter.payload.notes]] : []),
                         ]} />
                         {!isIncomingExternal ? <Panel title="Target dan Tebusan" rows={letter.targets?.map((x) => [x.kind === "cc" ? "Tembusan" : "Tujuan", targetLabel(x, targetOptions)])} /> : null}
-                        <Panel title="Disposisi" rows={letter.dispositions?.map((x) => [
+                        {isInternal ? (
+                            <Panel title="Permintaan Tanda Tangan QR" rows={letter.signature_requests?.map((request) => [
+                                `TTD ${request.signing_order}: ${request.signer?.name || "-"}`,
+                                `Halaman ${request.page_number}`,
+                                `Posisi ${(Number(request.x) * 100).toFixed(1)}%, ${(Number(request.y) * 100).toFixed(1)}%`,
+                                request.status || "pending",
+                            ])} />
+                        ) : null}
+                        {!isInternal && !isOutgoing ? <Panel title="Disposisi" rows={letter.dispositions?.map((x) => [
                             `Dari: ${x.from_user?.name || "-"}`,
                             `Tujuan: ${targetLabel(x, targetOptions)}`,
                             x.status,
                             x.note || "-",
-                        ])} />
+                        ])} /> : null}
                     </div>
                     <div className="space-y-6">
                         <form onSubmit={submit} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -119,7 +134,6 @@ export default function LetterShow() {
                         />
                         <Panel title="Status Baca" rows={letter.read_receipts?.map((x) => [x.user?.name || "-", x.read_at || "belum dibaca"])} />
                         <Panel title="Informasi Halaman" rows={[[`${letter.page_count || 1} Halaman`, `Lampiran: ${letter.page_count || 1} Halaman`]]} />
-                        {!isIncomingExternal ? <Panel title="Notifikasi" rows={notifications?.map((x) => [x.title, x.user?.name || "-", x.sent_at || "-"])} /> : null}
                     </div>
                 </div>
             </LayoutAdmin>

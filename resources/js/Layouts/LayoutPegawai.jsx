@@ -1,10 +1,12 @@
 import { Link, usePage } from "@inertiajs/react";
 import { useState } from "react";
+import ApplicationLogo from "@/Components/ApplicationLogo";
 import {
     Archive,
     Bell,
     BookOpen,
-    CheckCircle2,
+    CheckCheck,
+    ChevronDown,
     FilePlus2,
     Inbox,
     LayoutDashboard,
@@ -19,22 +21,49 @@ export default function LayoutPegawai({ children }) {
     const user = props.auth?.user;
     const badges = props.pegawaiBadges || {};
     const [profileOpen, setProfileOpen] = useState(false);
-    const menu = [
-        { name: "Dashboard", href: "/pegawai/dashboard", icon: LayoutDashboard },
+    const [inboxOpen, setInboxOpen] = useState(false);
+    const [mobileInboxOpen, setMobileInboxOpen] = useState(false);
+    const inboxBadge = Number(badges.internal || 0) + Number(badges.tebusan || 0) + Number(badges.disposisi || 0);
+    const inboxItems = [
         { name: "Internal", href: "/pegawai/inbox/internal", icon: Mail, badge: badges.internal },
         { name: "Tebusan", href: "/pegawai/inbox/tebusan", icon: Send, badge: badges.tebusan },
         { name: "Disposisi", href: "/pegawai/disposisi", icon: Inbox, badge: badges.disposisi },
+    ];
+    const menu = [
+        { name: "Dashboard", href: "/pegawai/dashboard", icon: LayoutDashboard },
+        { name: "Approval", href: "/pegawai/approval", icon: CheckCheck, badge: badges.approval },
         { name: "Buat Surat", href: "/pegawai/surat", icon: FilePlus2 },
         { name: "Arsip Saya", href: "/pegawai/arsip", icon: Archive },
     ];
+    const inboxActive = url.startsWith("/pegawai/inbox") || url.startsWith("/pegawai/disposisi");
+    const createRoutes = [
+        "/pegawai/surat",
+        "/pegawai/surat/internal",
+        "/pegawai/surat/keluar",
+        "/pegawai/surat/masuk-eksternal",
+        "/pegawai/surat/arsip",
+    ];
+    const currentPath = url.split("?")[0];
+    const isLetterDetail = /^\/pegawai\/surat\/\d+$/.test(currentPath);
+    const isMenuActive = (item) => {
+        if (item.href === "/pegawai/surat") {
+            return createRoutes.includes(currentPath);
+        }
+
+        if (item.href === "/pegawai/arsip" && isLetterDetail) {
+            return true;
+        }
+
+        return url.startsWith(item.href);
+    };
 
     return (
         <div className="min-h-screen bg-gray-100">
             <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
                     <Link href="/pegawai/dashboard" className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-700 text-white">
-                            <CheckCircle2 className="h-5 w-5" />
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
+                            <ApplicationLogo className="h-10 w-10" iconClassName="h-5 w-5" />
                         </div>
                         <div>
                             <div className="text-sm font-bold uppercase text-gray-950">PT Berdikari</div>
@@ -43,8 +72,53 @@ export default function LayoutPegawai({ children }) {
                     </Link>
 
                     <div className="hidden items-center gap-2 lg:flex">
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setInboxOpen((open) => !open)}
+                                className={`relative inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium ${
+                                    inboxActive ? "bg-emerald-50 text-emerald-800" : "text-gray-700 hover:bg-gray-50"
+                                }`}
+                            >
+                                <Inbox className="mr-2 h-4 w-4" />
+                                Inbox
+                                {inboxBadge ? (
+                                    <span className="ml-2 rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                                        {inboxBadge}
+                                    </span>
+                                ) : null}
+                                <ChevronDown className="ml-2 h-4 w-4" />
+                            </button>
+                            {inboxOpen ? (
+                                <div className="absolute left-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
+                                    {inboxItems.map((item) => {
+                                        const active = url.startsWith(item.href);
+                                        return (
+                                            <Link
+                                                key={item.name}
+                                                href={item.href}
+                                                onClick={() => setInboxOpen(false)}
+                                                className={`flex items-center justify-between px-4 py-3 text-sm font-medium ${
+                                                    active ? "bg-emerald-50 text-emerald-800" : "text-gray-700 hover:bg-gray-50"
+                                                }`}
+                                            >
+                                                <span className="inline-flex items-center">
+                                                    <item.icon className="mr-3 h-4 w-4 text-gray-400" />
+                                                    {item.name}
+                                                </span>
+                                                {item.badge ? (
+                                                    <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                                                        {item.badge}
+                                                    </span>
+                                                ) : null}
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            ) : null}
+                        </div>
                         {menu.map((item) => {
-                            const active = item.href === "/pegawai/surat" ? url.startsWith("/pegawai/surat") : url.startsWith(item.href);
+                            const active = isMenuActive(item);
                             return (
                                 <Link
                                     key={item.name}
@@ -103,6 +177,20 @@ export default function LayoutPegawai({ children }) {
                     </div>
                 </div>
                 <div className="flex gap-2 overflow-x-auto border-t border-gray-100 px-4 py-2 lg:hidden">
+                    <div className="shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setMobileInboxOpen((open) => !open)}
+                            className={`inline-flex items-center rounded-lg px-3 py-2 text-sm font-medium ${
+                                inboxActive ? "bg-emerald-50 text-emerald-800" : "bg-gray-50 text-gray-700"
+                            }`}
+                        >
+                            <Inbox className="mr-2 h-4 w-4" />
+                            Inbox
+                            {inboxBadge ? <span className="ml-2 rounded-full bg-red-600 px-1.5 py-0.5 text-xs text-white">{inboxBadge}</span> : null}
+                            <ChevronDown className="ml-2 h-4 w-4" />
+                        </button>
+                    </div>
                     {menu.map((item) => (
                         <Link key={item.name} href={item.href} className="inline-flex shrink-0 items-center rounded-lg bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">
                             <item.icon className="mr-2 h-4 w-4" />
@@ -111,6 +199,24 @@ export default function LayoutPegawai({ children }) {
                         </Link>
                     ))}
                 </div>
+                {mobileInboxOpen ? (
+                    <div className="grid gap-2 border-t border-gray-100 bg-white px-4 py-3 lg:hidden">
+                        {inboxItems.map((item) => (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                onClick={() => setMobileInboxOpen(false)}
+                                className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700"
+                            >
+                                <span className="inline-flex items-center">
+                                    <item.icon className="mr-2 h-4 w-4" />
+                                    {item.name}
+                                </span>
+                                {item.badge ? <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs text-white">{item.badge}</span> : null}
+                            </Link>
+                        ))}
+                    </div>
+                ) : null}
             </header>
 
             <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

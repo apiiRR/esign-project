@@ -19,7 +19,7 @@ const guides = [
         items: [
             "Menu Buat Surat membuka pilihan Surat Masuk Eksternal, Surat Internal, Surat Keluar, dan Arsip Scan.",
             "Surat Masuk Eksternal hanya memakai scan PDF, dilengkapi asal surat dan catatan.",
-            "Surat Internal dan Surat Keluar dapat memakai scan PDF atau template jika fitur template diaktifkan admin.",
+            "Surat Internal dan Surat Keluar dibuat dengan upload scan PDF.",
             "Arsip Scan dipakai untuk menyimpan dokumen PDF ke sistem tanpa alur pengiriman.",
         ],
     },
@@ -27,8 +27,8 @@ const guides = [
         title: "Nomor Surat, Draft, dan Send",
         icon: Send,
         items: [
-            "Jika nomor otomatis aktif pada jenis surat, nomor akan muncul sebagai default setelah jenis dan asal surat dipilih.",
-            "Simpan Draft membooking nomor surat agar tidak dipakai user lain.",
+            "Nomor Surat diisi manual sesuai dokumen atau kebutuhan perusahaan.",
+            "Simpan Draft menyimpan data dan file scan PDF tanpa mengirim notifikasi ke penerima.",
             "Send menyimpan surat dengan status terkirim dan membuat log notifikasi untuk penerima.",
             "Draft milik Anda dapat dihapus selama status surat masih draft.",
         ],
@@ -47,7 +47,7 @@ const guides = [
         icon: Archive,
         items: [
             "Arsip Saya menampilkan surat yang Anda buat, terima, baca, atau menjadi target.",
-            "Gunakan pencarian dan filter checklist untuk menemukan surat berdasarkan jenis, metode, status, atau pembuat.",
+            "Gunakan pencarian dan filter checklist untuk menemukan surat berdasarkan jenis, status, atau pembuat.",
         ],
     },
 ];

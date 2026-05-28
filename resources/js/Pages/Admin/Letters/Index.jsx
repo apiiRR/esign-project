@@ -31,22 +31,28 @@ export default function LettersIndex() {
                     <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                         <Search URL={searchUrl} filters={[
                             { key: "letter_type_ids", label: "Jenis Surat", options: filterOptions.letterTypes || [] },
-                            { key: "methods", label: "Metode", options: filterOptions.methods || [] },
                             { key: "statuses", label: "Status", options: filterOptions.statuses || [] },
                             { key: "creator_ids", label: "Pembuat", options: filterOptions.creators || [] },
                         ]} />
                         <div className="mt-5 overflow-x-auto rounded-lg border border-gray-200">
-                            <table className="min-w-[820px] divide-y divide-gray-200">
-                                <thead className="bg-gray-50"><tr>{["Surat", "Metode", "Halaman", "Status", "Pembuat", "Aksi"].map((h) => <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">{h}</th>)}</tr></thead>
+                            <table className="w-full min-w-[900px] table-fixed divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="w-[44%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Surat</th>
+                                        <th className="w-[12%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Halaman</th>
+                                        <th className="w-[14%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Status</th>
+                                        <th className="w-[22%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Pembuat</th>
+                                        <th className="w-[8%] px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">Aksi</th>
+                                    </tr>
+                                </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {(letters.data || []).map((letter) => (
                                         <tr key={letter.id}>
-                                            <td className="px-5 py-4"><div className="font-semibold text-gray-950 break-words">{letter.subject}</div><div className="text-xs text-gray-500 break-words">{isIncomingExternal ? (letter.letter_number || "-") : `${letter.reference} · ${letter.letter_number || "-"}`}</div></td>
-                                            <td className="px-5 py-4 text-sm text-gray-600">{letter.creation_method}</td>
-                                            <td className="px-5 py-4 text-sm text-gray-600">{letter.page_count || 1}</td>
-                                            <td className="px-5 py-4 text-sm text-gray-600">{letter.status}</td>
-                                            <td className="px-5 py-4 text-sm text-gray-600">{letter.creator?.name || "-"}</td>
-                                            <td className="px-5 py-4"><Link href={`/admin/surat/${letter.id}`} className="inline-flex rounded-lg bg-blue-50 p-2 text-blue-700"><Eye className="h-4 w-4" /></Link></td>
+                                            <td className="w-[44%] px-5 py-4"><div className="min-w-0 break-words font-semibold text-gray-950">{letter.subject}</div><div className="min-w-0 break-words text-xs text-gray-500">{isIncomingExternal ? (letter.letter_number || "-") : `${letter.reference} · ${letter.letter_number || "-"}`}</div></td>
+                                            <td className="w-[12%] px-5 py-4 text-sm text-gray-600">{letter.page_count || 1}</td>
+                                            <td className="w-[14%] px-5 py-4 text-sm text-gray-600">{letter.status}</td>
+                                            <td className="w-[22%] px-5 py-4 text-sm text-gray-600"><div className="min-w-0 break-words">{letter.creator?.name || "-"}</div></td>
+                                            <td className="w-[8%] px-5 py-4"><Link href={`/admin/surat/${letter.id}`} className="inline-flex rounded-lg bg-blue-50 p-2 text-blue-700"><Eye className="h-4 w-4" /></Link></td>
                                         </tr>
                                     ))}
                                 </tbody>

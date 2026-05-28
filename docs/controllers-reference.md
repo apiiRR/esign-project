@@ -19,7 +19,6 @@ Dokumen ini adalah indeks cepat untuk mencari fungsi controller.
 - `index(Request, string $type)`: daftar surat admin.
 - `create(string $mode)`: form surat.
 - `store(Request)`: simpan surat.
-- `previewLetterNumber(Request, LetterNumberGenerator)`: preview nomor.
 - `show(Letter, DispositionService)`: detail surat.
 - `update(Request, Letter)`: update nomor/status.
 - `destroyDraft(Request, Letter)`: hapus draft.
@@ -63,23 +62,12 @@ Dokumen ini adalah indeks cepat untuk mencari fungsi controller.
 - `update(Request)`: simpan setting.
 - `setting()`: ambil/buat setting row.
 
-### `Admin\LetterTemplateController`
-
-- `index()`
-- `create()`
-- `store(Request)`
-- `edit(LetterTemplate)`
-- `update(Request, LetterTemplate)`
-- `destroy(LetterTemplate)`
-
 ### `Admin\LetterTypeController`
 
 - `index()`
 - `store(Request)`
 - `update(Request, LetterType)`
 - `destroy(LetterType)`
-- `normalizeNumberingPayload(array)`
-- `numberingContextOptions()`
 
 ### `Admin\NotificationController`
 
@@ -121,7 +109,6 @@ Pembuatan surat:
 - `storeIncomingExternal(Request)`
 - `storeArchive(Request)`
 - `storeLetter(Request, string $mode)`
-- `previewLetterNumber(Request, LetterNumberGenerator)`
 - `destroyDraft(Request, Letter)`
 
 Publish:
@@ -170,17 +157,6 @@ Helper surat:
 - `logUploadValidationFailure(Request, ValidationException, string $mode)`
 
 ## Service
-
-### `LetterNumberGenerator`
-
-- `preview(LetterType, User, string, array)`
-- `generate(LetterType, User, string, array)`
-- `isEnabledForContext(LetterType, string)`
-- `render(...)`
-- `nextSequence(Carbon)`
-- `originCode(User, array)`
-- `unitCode(object)`
-- `romanMonth(int)`
 
 ### `DispositionService`
 

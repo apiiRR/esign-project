@@ -59,7 +59,6 @@ class SettingController extends Controller implements HasMiddleware
             'company_name' => 'required|string|max:255',
             'company_code' => 'required|string|max:50',
             'company_logo' => 'nullable|image|mimes:png,jpg,jpeg|max:2048',
-            'enable_letter_template_method' => 'nullable|boolean',
             'letter_field_requirements' => 'nullable|array',
         ]);
 
@@ -68,7 +67,6 @@ class SettingController extends Controller implements HasMiddleware
             'company_name',
             'company_code',
         ]);
-        $data['enable_letter_template_method'] = $request->boolean('enable_letter_template_method');
         $data['letter_field_requirements'] = app(LetterFieldRequirementService::class)
             ->normalize($request->input('letter_field_requirements', []));
 
@@ -99,7 +97,6 @@ class SettingController extends Controller implements HasMiddleware
             'app_name' => 'Surat & Arsip Digital',
             'company_name' => 'PT Berdikari',
             'company_code' => 'BDRK',
-            'enable_letter_template_method' => false,
             'letter_field_requirements' => app(LetterFieldRequirementService::class)->defaults(),
         ]);
     }

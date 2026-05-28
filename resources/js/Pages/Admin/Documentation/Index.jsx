@@ -17,7 +17,7 @@ const sections = [
         icon: Network,
         items: [
             "Direktorat, Divisi, dan Department dipakai sebagai struktur akses surat dan target disposisi.",
-            "Kode unit tidak ditampilkan di UI master organisasi, tetapi tetap dipakai internal untuk format nomor surat.",
+            "Kode unit tidak ditampilkan di UI master organisasi, tetapi tetap dipakai untuk identitas internal unit.",
             "Pejabat unit dapat diisi dari master data atau tersinkron otomatis saat user diberi jabatan Direktur, General Manager, atau Manager.",
         ],
     },
@@ -31,20 +31,19 @@ const sections = [
         ],
     },
     {
-        title: "Jenis Surat dan Nomor Otomatis",
+        title: "Jenis Surat dan Nomor Manual",
         icon: Shield,
         items: [
             "Jenis Surat wajib dipilih saat membuat surat baru.",
-            "Nomor otomatis dapat diaktifkan per jenis surat dan per konteks: masuk eksternal, internal, keluar, atau arsip scan.",
-            "Format nomor mendukung variabel {day}, {daily_sequence}, {letter_type_code}, {company_code}, {origin_code}, {roman_month}, {month}, dan {year}.",
-            "Nomor dibooking saat user menyimpan draft atau menekan Send, sehingga nomor draft tidak dipakai user lain.",
+            "Master Jenis Surat hanya menyimpan nama, deskripsi, dan status aktif.",
+            "Nomor publik surat diisi manual oleh user pada field Nomor Surat.",
+            "Reference internal tetap dibuat sistem untuk kebutuhan teknis dan relasi data.",
         ],
     },
     {
-        title: "Template, Settings, Log, dan Notifikasi",
+        title: "Settings, Log, dan Notifikasi",
         icon: Settings,
         items: [
-            "Template Surat mengatur format Nota Dinas untuk surat internal dan surat keluar jika metode template diaktifkan.",
             "Settings disederhanakan untuk kebutuhan aplikasi: nama aplikasi, nama perusahaan, kode perusahaan, dan logo.",
             "Log Viewer digunakan admin untuk membaca error teknis Laravel. Notifikasi disimpan sebagai log saat surat dikirim ke penerima.",
         ],
@@ -65,7 +64,7 @@ export default function AdminDocumentation() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Admin</h1>
                                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                                    Panduan operasional admin untuk mengelola user, master data, template, surat, notifikasi, log teknis, dan pengaturan aplikasi Surat & Arsip Digital PT Berdikari.
+                                    Panduan operasional admin untuk mengelola user, master data, surat, notifikasi, log teknis, dan pengaturan aplikasi Surat & Arsip Digital PT Berdikari.
                                 </p>
                             </div>
                         </div>

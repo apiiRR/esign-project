@@ -15,7 +15,7 @@ const cards = [
     {
         title: "Entity Utama",
         icon: Database,
-        items: ["users, directorates, divisions, departments", "letter_types, letter_templates, letters", "letter_targets, attachments, dispositions", "read receipts, notification logs", "Laravel file log melalui Log Viewer"],
+        items: ["users, directorates, divisions, departments", "letter_types, letters", "letter_targets, attachments, dispositions", "read receipts, notification logs", "Laravel file log melalui Log Viewer"],
     },
     {
         title: "Route Utama",
@@ -93,9 +93,9 @@ export default function DeveloperDocs() {
                     </div>
 
                     <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                        <h2 className="text-base font-semibold text-gray-950">Nomor Surat Otomatis</h2>
+                        <h2 className="text-base font-semibold text-gray-950">Nomor Surat Manual</h2>
                         <p className="mt-2 text-sm leading-6 text-gray-600">
-                            Format nomor surat diatur dari master Jenis Surat. Variabel yang didukung: {"{day}"}, {"{daily_sequence}"}, {"{letter_type_code}"}, {"{company_code}"}, {"{origin_code}"}, {"{roman_month}"}, {"{month}"}, dan {"{year}"}. Nomor dibooking saat draft atau send.
+                            Nomor publik surat disimpan pada <code>letter_number</code> dari input user. <code>reference</code> tetap menjadi ID teknis internal dan tidak dipakai sebagai nomor utama di UI.
                         </p>
                     </section>
 

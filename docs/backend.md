@@ -33,7 +33,6 @@ Fungsi publik:
 - `index(Request, string $type)`: daftar surat berdasarkan tipe route admin.
 - `create(string $mode)`: form pembuatan surat.
 - `store(Request)`: validasi, buat surat, simpan target/tembusan, lampiran, dan notifikasi.
-- `previewLetterNumber(Request, LetterNumberGenerator)`: preview nomor otomatis.
 - `show(Letter, DispositionService)`: detail surat admin.
 - `update(Request, Letter)`: update nomor/status surat.
 - `destroyDraft(Request, Letter)`: hapus draft dan lampirannya.
@@ -88,16 +87,8 @@ CRUD user admin/pegawai.
 ### `Admin\SettingController`
 
 - `index()`: tampilkan setting aplikasi.
-- `update(Request)`: update nama app, company, template method, dan requirement field surat.
+- `update(Request)`: update nama app, company, logo, dan requirement field surat.
 - `setting()`: ambil atau buat row setting.
-
-### `Admin\LetterTemplateController`
-
-CRUD template Nota Dinas:
-
-- `index()`, `create()`, `store()`, `edit()`, `update()`, `destroy()`.
-
-Template dipakai oleh surat internal dan surat keluar jika fitur template aktif.
 
 ### `Admin\LetterTypeController`
 
@@ -107,8 +98,6 @@ CRUD jenis surat:
 - `store(Request)`
 - `update(Request, LetterType)`
 - `destroy(LetterType)`
-- `normalizeNumberingPayload(array)`: normalisasi config penomoran.
-- `numberingContextOptions()`: pilihan konteks nomor otomatis.
 
 ### `Admin\NotificationController`
 
@@ -147,12 +136,9 @@ CRUD permission dan role berbasis package Spatie Permission.
 
 - `storeLetter(Request, string $mode)`
   Fungsi inti pembuatan semua jenis surat:
-  validasi field berdasarkan mode, normalisasi asal surat, generate nomor jika perlu, simpan row `letters`, simpan target/tembusan, simpan lampiran, dan buat notifikasi.
+  validasi field berdasarkan mode, normalisasi asal surat, simpan row `letters`, simpan target/tembusan, simpan lampiran scan PDF, dan buat notifikasi.
 
 ### Nomor surat
-
-- `previewLetterNumber(Request, LetterNumberGenerator)`
-  Mengembalikan preview nomor otomatis. Untuk `incoming_external`, return `null` karena nomor wajib dari input user.
 
 - `makeReference(string $mode)`
   Membuat ID internal seperti `BDK-INT`, `BDK-OUT`, `BDK-EXT`, atau `BDK-ARS`.
@@ -208,7 +194,7 @@ CRUD permission dan role berbasis package Spatie Permission.
 ### Akses dan query
 
 - `baseProps(User)`
-  Props global portal pegawai: badge, templates, letter types, target options, filter options.
+  Props global portal pegawai: badge, letter types, target options, filter options.
 
 - `dashboardStats(User)`
   Statistik dashboard pegawai.
@@ -265,24 +251,13 @@ CRUD permission dan role berbasis package Spatie Permission.
 
 ## Services
 
-### `LetterNumberGenerator`
+### `LetterFieldRequirementService`
 
 Tanggung jawab:
 
-- Preview nomor surat.
-- Generate nomor surat unik.
-- Render format nomor dengan variable seperti day, daily_sequence, letter_type_code, company_code, origin_code, roman_month, year.
-- Menentukan origin code dari direktorat/divisi/department.
-
-Fungsi penting:
-
-- `preview()`
-- `generate()`
-- `isEnabledForContext()`
-- `render()`
-- `nextSequence()`
-- `originCode()`
-- `romanMonth()`
+- Menyimpan default field wajib per tipe surat.
+- Menormalisasi konfigurasi field wajib dari Settings.
+- Menentukan apakah field tertentu wajib diisi pada form surat.
 
 ### `DispositionService`
 
@@ -298,14 +273,6 @@ Konsep scope:
 - Direktur dapat target divisi/GM/manager/department di bawah direktoratnya.
 - GM dapat target divisi/manager/department di bawah divisinya.
 - Manager dapat target department miliknya.
-
-### `LetterFieldRequirementService`
-
-Tanggung jawab:
-
-- Mendefinisikan field yang bisa diwajibkan per konteks surat.
-- Membaca setting `letter_field_requirements`.
-- Menentukan apakah field tertentu wajib.
 
 Konteks:
 

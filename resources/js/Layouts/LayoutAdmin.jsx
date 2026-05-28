@@ -67,11 +67,6 @@ export default function LayoutAdmin({ children }) {
         setCurrentPath(window.location.pathname);
     }, []);
 
-    // Cek apakah route saat ini adalah create atau edit letter template
-    const isLetterTemplateCreateOrEdit = 
-        currentPath.startsWith('/admin/letter-templates/create') || 
-        currentPath.includes('/admin/letter-templates/edit/');
-
     // useEffect untuk handle klik di luar dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -125,7 +120,7 @@ export default function LayoutAdmin({ children }) {
         <div className="min-h-screen bg-gray-200">
             {/* Top Navigation */}
             <nav className="sticky top-0 z-50 bg-white shadow-sm">
-                <div className={`px-4 mx-auto ${isLetterTemplateCreateOrEdit ? 'max-w-full' : 'max-w-7xl'} sm:px-6 lg:px-8`}>
+                <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="flex justify-between h-16">
                         {/* Left Section: Logo & Desktop Menu */}
                         <div className="flex items-center">
@@ -183,7 +178,7 @@ export default function LayoutAdmin({ children }) {
 
             {/* Main Content */}
             <main className="py-8">
-                 <div className={`px-4 mx-auto ${isLetterTemplateCreateOrEdit ? 'max-w-full' : 'max-w-7xl'} sm:px-6 lg:px-8`}>
+                 <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     {children}
                 </div>
             </main>

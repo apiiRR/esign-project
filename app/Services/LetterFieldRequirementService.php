@@ -23,7 +23,6 @@ class LetterFieldRequirementService
             'targets' => 'Tujuan',
             'cc_targets' => 'Tembusan',
             'letter_number' => 'Nomor Surat',
-            'body_rendered' => 'Isi Nota Dinas',
         ],
         'outgoing' => [
             'letter_type_id' => 'Jenis Surat',
@@ -32,7 +31,6 @@ class LetterFieldRequirementService
             'internal_origin' => 'Asal Surat',
             'external_recipient' => 'Tujuan Eksternal',
             'letter_number' => 'Nomor Surat',
-            'body_rendered' => 'Isi Nota Dinas',
         ],
         'archive' => [
             'letter_type_id' => 'Jenis Surat',
@@ -62,7 +60,6 @@ class LetterFieldRequirementService
                 'targets' => true,
                 'cc_targets' => false,
                 'letter_number' => false,
-                'body_rendered' => false,
             ],
             'outgoing' => [
                 'letter_type_id' => true,
@@ -71,7 +68,6 @@ class LetterFieldRequirementService
                 'internal_origin' => true,
                 'external_recipient' => true,
                 'letter_number' => false,
-                'body_rendered' => false,
             ],
             'archive' => [
                 'letter_type_id' => true,

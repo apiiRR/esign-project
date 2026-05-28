@@ -112,10 +112,8 @@ Helper penting:
   CRUD role.
 - `Admin/Permissions`
   CRUD permission.
-- `Admin/LetterTemplates`
-  CRUD template surat.
 - `Admin/LetterTypes/Index.jsx`
-  CRUD jenis surat dan konfigurasi nomor otomatis.
+  CRUD jenis surat dasar.
 
 ### Setting dan Monitoring
 
@@ -158,12 +156,6 @@ Submit surat:
 
 ## Preview Surat
 
-Untuk template Nota Dinas:
-
-- `NotaDinasPreview` dipakai untuk render HTML template.
-- `page_count` dapat diupdate dari preview.
-
-Untuk scan PDF:
-
-- File dipreview dengan object URL sebelum upload.
+- Form surat hanya menerima upload scan PDF.
+- File PDF dipreview dengan object URL sebelum upload.
 - File tersimpan di storage public setelah submit.

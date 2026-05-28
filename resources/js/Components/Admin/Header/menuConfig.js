@@ -7,7 +7,6 @@ import {
     Mail,
     Network,
     Send,
-    Settings,
     Shield,
     Users,
 } from "lucide-react";
@@ -71,12 +70,6 @@ export const menuItems = [
                 description: "Master department dan Manager",
             },
             {
-                name: "Template Surat",
-                href: "/admin/letter-templates",
-                icon: FileText,
-                description: "Template internal dan keluar",
-            },
-            {
                 name: "Jenis Surat",
                 href: "/admin/letter-types",
                 icon: FileText,
@@ -108,11 +101,6 @@ export const menuItems = [
             },
         ],
     },
-    // {
-    //     name: "Settings",
-    //     icon: Settings,
-    //     href: "/admin/settings",
-    // },
 ];
 
 export const getFilteredMenuItems = () => menuItems;

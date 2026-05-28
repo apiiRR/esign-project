@@ -2,7 +2,7 @@
 
 ## Ringkasan Aplikasi
 
-Surat & Arsip Digital PT Berdikari adalah aplikasi web untuk mengelola surat perusahaan secara digital. Aplikasi ini mencakup surat masuk eksternal, surat internal, surat keluar, arsip scan, disposisi, publish surat ke unit organisasi, status baca, notifikasi, template Nota Dinas, dan nomor surat otomatis.
+Surat & Arsip Digital PT Berdikari adalah aplikasi web untuk mengelola surat perusahaan secara digital. Aplikasi ini mencakup surat masuk eksternal, surat internal, surat keluar, arsip scan PDF, disposisi, publish surat ke unit organisasi, status baca, dan notifikasi.
 
 Aplikasi dibuat untuk mendukung kebutuhan organisasi yang dinamis. Karena pegawai dapat berpindah posisi, akses bisnis surat sebisa mungkin berbasis unit organisasi seperti direktorat, divisi, department, atau jabatan unit, bukan melekat permanen ke satu orang. User tetap dicatat sebagai aktor aktivitas seperti pembuat surat, pembaca surat, pengirim disposisi, dan penerima notifikasi.
 
@@ -26,7 +26,6 @@ Admin mengelola data master dan administrasi sistem:
 - Master direktorat, divisi, department.
 - Master user, role, permission.
 - Master jenis surat.
-- Template surat Nota Dinas.
 - Setting aplikasi dan field wajib.
 - Daftar surat semua tipe.
 - Disposisi admin.
@@ -65,7 +64,7 @@ Surat antar unit internal perusahaan.
 
 Karakter utama:
 
-- Dapat dibuat dari scan PDF atau template Nota Dinas jika fitur template aktif.
+- Dibuat dengan upload scan PDF.
 - Mendukung draft dan send.
 - Memiliki tujuan dan tembusan internal.
 - Asal surat dipilih dari direktorat, divisi, atau department user.
@@ -78,7 +77,7 @@ Surat perusahaan untuk pihak eksternal.
 
 Karakter utama:
 
-- Dapat dibuat dari scan PDF atau template Nota Dinas.
+- Dibuat dengan upload scan PDF.
 - Memiliki tujuan eksternal berupa nama instansi/perusahaan.
 - Memiliki tembusan internal.
 - Nomor utama di UI memakai `letter_number`, bukan `reference` internal seperti `BDK-OUT-...`.
@@ -105,7 +104,7 @@ Ada dua konsep nomor:
 
 UI sebaiknya memakai `letter_number` sebagai nomor utama. `reference` dipertahankan untuk kebutuhan internal seperti relasi lama, path storage, dan identitas teknis aplikasi.
 
-Nomor otomatis diatur melalui master Jenis Surat. Jika numbering aktif untuk konteks tertentu, sistem dapat membuat nomor berdasarkan format konfigurasi.
+Nomor surat diisi manual oleh user. Sistem tidak lagi melakukan preview atau generator nomor otomatis.
 
 ## Konsep Organisasi
 
@@ -200,7 +199,7 @@ Backend:
 - `app/Http/Controllers/Admin`: controller admin.
 - `app/Http/Controllers/Pegawai/PortalController.php`: controller utama portal pegawai.
 - `app/Models`: model Eloquent.
-- `app/Services`: logic domain seperti nomor surat, disposisi, dan field requirement.
+- `app/Services`: logic domain seperti disposisi dan field requirement.
 - `database/migrations`: struktur database.
 - `database/seeders`: data awal.
 

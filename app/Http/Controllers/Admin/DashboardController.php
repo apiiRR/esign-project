@@ -8,7 +8,6 @@ use App\Models\Directorate;
 use App\Models\Disposition;
 use App\Models\Division;
 use App\Models\Letter;
-use App\Models\LetterTemplate;
 use App\Models\NotificationLog;
 use App\Models\User;
 use Carbon\Carbon;
@@ -46,12 +45,11 @@ class DashboardController extends Controller
                 'internal' => (int) ($typeCounts['internal'] ?? 0),
                 'active_dispositions' => Disposition::where('status', 'open')->count(),
                 'users' => User::count(),
-                'templates' => LetterTemplate::count(),
-                'archived_scans' => Letter::where('creation_method', 'scan')->where('status', 'archived')->count(),
+                'archived_scans' => Letter::where('status', 'archived')->count(),
                 'organization_units' => Directorate::count() + Division::count() + Department::count(),
                 'unread_notifications' => NotificationLog::whereNull('read_at')->count(),
             ],
-            'recentLetters' => Letter::with(['creator:id,name,username', 'template:id,name'])
+            'recentLetters' => Letter::with(['creator:id,name,username'])
                 ->latest()
                 ->limit(6)
                 ->get(),

@@ -8,6 +8,9 @@ Route::get('/', fn () => redirect()->route('login'))->name('home');
 Route::get('/developer-docs', [\App\Http\Controllers\DocumentationController::class, 'developer'])
     ->name('developer-docs');
 
+Route::get('/verify/signature/{token}', [\App\Http\Controllers\SignatureVerificationController::class, 'show'])
+    ->name('signature.verify');
+
 // route login satu pintu
 Route::get('/login', [\App\Http\Controllers\Admin\Auth\LoginController::class, 'index'])
     ->name('login')
@@ -64,8 +67,6 @@ Route::prefix('admin')->name('admin.')->group(function() {
             ->name('surat.create');
         Route::post('/surat', [App\Http\Controllers\Admin\LetterController::class, 'store'])
             ->name('surat.store');
-        Route::get('/nomor-surat/preview', [App\Http\Controllers\Admin\LetterController::class, 'previewLetterNumber'])
-            ->name('letter-number.preview');
         Route::delete('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'destroyDraft'])
             ->name('surat.destroy-draft');
         Route::get('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'show'])
@@ -108,9 +109,6 @@ Route::prefix('admin')->name('admin.')->group(function() {
         // route resource untuk user
         Route::resource('/users', App\Http\Controllers\Admin\UserController::class)->except(['show']);
 
-        // route resource untuk letter template
-        Route::resource('/letter-templates', App\Http\Controllers\Admin\LetterTemplateController::class)->except(['show']);
-
         // route resource untuk jenis surat
         Route::resource('/letter-types', App\Http\Controllers\Admin\LetterTypeController::class)->except(['create', 'edit', 'show']);
 
@@ -146,6 +144,21 @@ Route::prefix('pegawai')->name('pegawai.')->middleware('auth')->group(function()
         ->defaults('section', 'inbox')
         ->defaults('mode', 'disposisi')
         ->name('disposisi');
+
+    Route::get('/approval', [App\Http\Controllers\Pegawai\PortalController::class, 'approvalIndex'])
+        ->name('approval.index');
+
+    Route::get('/approval/{signatureRequest}', [App\Http\Controllers\Pegawai\PortalController::class, 'approvalShow'])
+        ->name('approval.show');
+
+    Route::post('/approval/{signatureRequest}/read', [App\Http\Controllers\Pegawai\PortalController::class, 'markApprovalRead'])
+        ->name('approval.read');
+
+    Route::post('/approval/{signatureRequest}/approve', [App\Http\Controllers\Pegawai\PortalController::class, 'approveSignature'])
+        ->name('approval.approve');
+
+    Route::post('/approval/{signatureRequest}/reject', [App\Http\Controllers\Pegawai\PortalController::class, 'rejectSignature'])
+        ->name('approval.reject');
 
     Route::get('/notifikasi', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
         ->defaults('section', 'notifications')
@@ -188,9 +201,6 @@ Route::prefix('pegawai')->name('pegawai.')->middleware('auth')->group(function()
 
     Route::post('/surat/arsip', [App\Http\Controllers\Pegawai\PortalController::class, 'storeArchive'])
         ->name('surat.archive.store');
-
-    Route::get('/nomor-surat/preview', [App\Http\Controllers\Pegawai\PortalController::class, 'previewLetterNumber'])
-        ->name('letter-number.preview');
 
     Route::get('/arsip', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
         ->defaults('section', 'archive')

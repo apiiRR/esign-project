@@ -1,4 +1,8 @@
 {
+  "node_modules/pdfjs-dist/build/pdf.worker.min.mjs": {
+    "file": "assets/pdf.worker.min-iDqQPrd3.mjs",
+    "src": "node_modules/pdfjs-dist/build/pdf.worker.min.mjs"
+  },
   "node_modules/workbox-window/build/workbox-window.prod.es5.mjs": {
     "file": "assets/workbox-window.prod.es5-BBnX5xw4.js",
     "name": "workbox-window.prod.es5",
@@ -6,7 +10,7 @@
     "isDynamicEntry": true
   },
   "resources/css/app.css": {
-    "file": "assets/app-DYXPFAw9.css",
+    "file": "assets/app-DsDh4rv8.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -15,12 +19,15 @@
     ]
   },
   "resources/js/app.jsx": {
-    "file": "assets/app-LelPEKuz.js",
+    "file": "assets/app-kvqlhRjm.js",
     "name": "app",
     "src": "resources/js/app.jsx",
     "isEntry": true,
     "dynamicImports": [
       "node_modules/workbox-window/build/workbox-window.prod.es5.mjs"
+    ],
+    "assets": [
+      "assets/pdf.worker.min-iDqQPrd3.mjs"
     ]
   }
 }

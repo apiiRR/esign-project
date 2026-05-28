@@ -13,9 +13,7 @@ class Letter extends Model
      */
     protected $fillable = [
         'type',
-        'creation_method',
         'letter_type_id',
-        'letter_template_id',
         'created_by',
         'origin_directorate_id',
         'origin_division_id',
@@ -25,8 +23,9 @@ class Letter extends Model
         'letter_number',
         'reference',
         'page_count',
+        'signed_pdf_path',
+        'signature_status',
         'status',
-        'body_rendered',
         'payload',
         'meta',
     ];
@@ -44,11 +43,6 @@ class Letter extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
-    }
-
-    public function template()
-    {
-        return $this->belongsTo(LetterTemplate::class, 'letter_template_id');
     }
 
     public function letterType()
@@ -74,5 +68,10 @@ class Letter extends Model
     public function readReceipts()
     {
         return $this->hasMany(LetterReadReceipt::class);
+    }
+
+    public function signatureRequests()
+    {
+        return $this->hasMany(LetterSignatureRequest::class)->orderBy('signing_order');
     }
 }

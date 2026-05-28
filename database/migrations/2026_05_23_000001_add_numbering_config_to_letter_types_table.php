@@ -1,6 +1,5 @@
 <?php
 
-use App\Services\LetterNumberGenerator;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -33,7 +32,7 @@ return new class extends Migration
 
         if (! Schema::hasColumn('letter_types', 'numbering_format')) {
             Schema::table('letter_types', function (Blueprint $table) {
-                $table->string('numbering_format')->default(LetterNumberGenerator::DEFAULT_FORMAT)->after('numbering_contexts');
+                $table->string('numbering_format')->default('{day}-{daily_sequence}/{letter_type_code}/{company_code}/{origin_code}/{roman_month}/{year}')->after('numbering_contexts');
             });
         }
     }

@@ -18,10 +18,10 @@
     },
     "dependencies": {
         "@inertiajs/react": "^2.2.19",
-        "@tinymce/tinymce-react": "^6.3.0",
         "@vitejs/plugin-react": "^5.1.1",
         "chart.js": "^4.5.1",
         "lucide-react": "^0.561.0",
+        "pdfjs-dist": "^5.7.284",
         "react": "^19.2.1",
         "react-chartjs-2": "^5.3.1",
         "react-dom": "^19.2.1",

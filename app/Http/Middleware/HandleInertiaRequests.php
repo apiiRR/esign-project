@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Inertia\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -62,7 +63,7 @@ class HandleInertiaRequests extends Middleware
             ],
 
             // settings
-            'settings' => \App\Models\Setting::first(),
+            'settings' => Schema::hasTable('settings') ? \App\Models\Setting::first() : null,
         ];
     }
 }

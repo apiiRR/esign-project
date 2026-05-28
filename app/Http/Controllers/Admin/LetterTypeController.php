@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\LetterType;
-use App\Services\LetterNumberGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -25,10 +24,7 @@ class LetterTypeController extends Controller implements HasMiddleware
     {
         return inertia('Admin/LetterTypes/Index', [
             'letterTypes' => LetterType::query()
-                ->when(request()->q, fn ($query, $search) => $query->where(fn ($letterType) => $letterType
-                    ->where('name', 'like', "%{$search}%")
-                    ->orWhere('code', 'like', "%{$search}%")
-                ))
+                ->when(request()->q, fn ($query, $search) => $query->where('name', 'like', "%{$search}%"))
                 ->when(request()->filled('statuses'), fn ($query) => $query->whereIn('status', (array) request()->statuses))
                 ->latest()
                 ->paginate(10)
@@ -38,7 +34,6 @@ class LetterTypeController extends Controller implements HasMiddleware
                     ['id' => 'active', 'name' => 'Aktif'],
                     ['id' => 'inactive', 'name' => 'Nonaktif'],
                 ]),
-                'contexts' => $this->numberingContextOptions(),
             ],
         ]);
     }
@@ -47,16 +42,11 @@ class LetterTypeController extends Controller implements HasMiddleware
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:letter_types,name',
-            'code' => 'nullable|string|max:50',
             'description' => 'nullable|string',
-            'numbering_enabled' => 'nullable|boolean',
-            'numbering_contexts' => 'nullable|array',
-            'numbering_contexts.*' => 'in:incoming_external,internal,outgoing,archive',
-            'numbering_format' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
         ]);
 
-        LetterType::query()->create($this->normalizeNumberingPayload($validated));
+        LetterType::query()->create($validated);
 
         return back()->with('success', 'Jenis surat berhasil dibuat.');
     }
@@ -65,16 +55,11 @@ class LetterTypeController extends Controller implements HasMiddleware
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:letter_types,name,' . $letter_type->id,
-            'code' => 'nullable|string|max:50',
             'description' => 'nullable|string',
-            'numbering_enabled' => 'nullable|boolean',
-            'numbering_contexts' => 'nullable|array',
-            'numbering_contexts.*' => 'in:incoming_external,internal,outgoing,archive',
-            'numbering_format' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
         ]);
 
-        $letter_type->update($this->normalizeNumberingPayload($validated));
+        $letter_type->update($validated);
 
         return back()->with('success', 'Jenis surat berhasil diperbarui.');
     }
@@ -86,22 +71,4 @@ class LetterTypeController extends Controller implements HasMiddleware
         return back()->with('success', 'Jenis surat berhasil dihapus.');
     }
 
-    private function normalizeNumberingPayload(array $validated): array
-    {
-        $validated['numbering_enabled'] = (bool) ($validated['numbering_enabled'] ?? false);
-        $validated['numbering_contexts'] = array_values($validated['numbering_contexts'] ?? []);
-        $validated['numbering_format'] = ($validated['numbering_format'] ?? null) ?: LetterNumberGenerator::DEFAULT_FORMAT;
-
-        return $validated;
-    }
-
-    private function numberingContextOptions(): array
-    {
-        return [
-            ['id' => 'incoming_external', 'name' => 'Surat Masuk Eksternal'],
-            ['id' => 'internal', 'name' => 'Surat Internal'],
-            ['id' => 'outgoing', 'name' => 'Surat Keluar'],
-            ['id' => 'archive', 'name' => 'Arsip Scan'],
-        ];
-    }
 }

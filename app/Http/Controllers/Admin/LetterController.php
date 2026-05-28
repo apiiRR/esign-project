@@ -11,15 +11,12 @@ use App\Models\Letter;
 use App\Models\LetterAttachment;
 use App\Models\LetterReadReceipt;
 use App\Models\LetterTarget;
-use App\Models\LetterTemplate;
 use App\Models\LetterType;
 use App\Models\NotificationLog;
-use App\Models\Setting;
 use App\Models\User;
 use App\Services\DispositionService;
-use App\Services\LetterNumberGenerator;
 use App\Services\LetterFieldRequirementService;
-use Illuminate\Http\JsonResponse;
+use App\Services\LetterSignatureService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -36,11 +33,12 @@ class LetterController extends Controller
         $mappedType = $this->mapType($type);
 
         $letters = Letter::query()
-            ->with(['creator:id,name,username', 'template:id,name,category', 'letterType:id,name'])
-            ->when($isArchive, fn ($query) => $query
-                ->where('creation_method', 'scan')
-                ->where('status', 'archived')
-            )
+            ->with(['creator:id,name,username', 'letterType:id,name'])
+            ->when($isArchive, fn ($query) => $query->where(function ($archive) {
+                $archive->where('status', 'archived')
+                    ->orWhere('type', 'archive')
+                    ->orWhere('meta->mode', 'archive');
+            }))
             ->when(! $isArchive, fn ($query) => $query->where('type', $mappedType))
             ->when($request->q, fn ($query, $search) => $query->where(fn ($q) => $q
                 ->where('title', 'like', "%{$search}%")
@@ -49,7 +47,6 @@ class LetterController extends Controller
                 ->orWhere('reference', 'like', "%{$search}%")
             ))
             ->when($request->filled('letter_type_ids'), fn ($query) => $query->whereIn('letter_type_id', (array) $request->letter_type_ids))
-            ->when($request->filled('methods'), fn ($query) => $query->whereIn('creation_method', (array) $request->methods))
             ->when($request->filled('statuses'), fn ($query) => $query->whereIn('status', (array) $request->statuses))
             ->when($request->filled('creator_ids'), fn ($query) => $query->whereIn('created_by', (array) $request->creator_ids))
             ->latest()
@@ -63,10 +60,6 @@ class LetterController extends Controller
             'filterOptions' => [
                 'letterTypes' => LetterType::query()->where('status', 'active')->orderBy('name')->get(['id', 'name']),
                 'creators' => User::query()->whereNotNull('id')->orderBy('name')->get(['id', 'name']),
-                'methods' => [
-                    ['id' => 'scan', 'name' => 'Scan Surat'],
-                    ['id' => 'template', 'name' => 'Buat dari Template'],
-                ],
                 'statuses' => collect(['draft', 'sent', 'received', 'disposed', 'archived', 'rejected'])
                     ->map(fn ($status) => ['id' => $status, 'name' => ucfirst($status)])
                     ->values(),
@@ -82,33 +75,22 @@ class LetterController extends Controller
         return inertia('Admin/Letters/Form', [
             'type' => $type,
             'isArchive' => $isArchive,
-            'templateEnabled' => (bool) Setting::query()->value('enable_letter_template_method'),
-            'templates' => LetterTemplate::where('status', 'active')
-                ->whereIn('category', [$type === 'outgoing' ? 'outgoing' : 'internal', 'both'])
-                ->orderBy('name')
-                ->get(),
             'letterTypes' => LetterType::query()
                 ->where('status', 'active')
                 ->orderBy('name')
-                ->get(['id', 'name', 'code', 'numbering_enabled', 'numbering_contexts', 'numbering_format']),
+                ->get(['id', 'name']),
             'targetOptions' => $this->targetOptions(),
         ]);
     }
 
     public function store(Request $request)
     {
-        $templateEnabled = (bool) Setting::query()->value('enable_letter_template_method');
         $type = $request->input('type');
         $isArchive = $request->boolean('is_archive');
         $isInternal = $type === 'internal';
         $isOutgoing = $type === 'outgoing';
-        $supportsTemplate = ($isInternal || $isOutgoing) && $templateEnabled;
         $context = $isArchive ? 'archive' : $type;
         $requirements = app(LetterFieldRequirementService::class);
-
-        if (! $supportsTemplate) {
-            $request->merge(['creation_method' => 'scan']);
-        }
 
         $targetRules = 'required|in:directorate,division,department,division_gm,department_manager';
 
@@ -117,52 +99,44 @@ class LetterController extends Controller
                 'type' => 'required|in:incoming_external,outgoing,internal',
                 'is_archive' => 'nullable|boolean',
                 'submit_action' => $isInternal || $isOutgoing ? 'required|in:draft,send' : 'nullable',
-                'creation_method' => $supportsTemplate ? 'required|in:scan,template' : 'required|in:scan',
                 'letter_type_id' => 'required|exists:letter_types,id',
-                'letter_template_id' => $supportsTemplate ? 'nullable|required_if:creation_method,template|exists:letter_templates,id' : 'nullable',
                 'letter_number' => ($type === 'incoming_external' && ! $isArchive ? 'required' : ($requirements->required($context, 'letter_number') ? 'required' : 'nullable')) . '|string|max:255|unique:letters,letter_number',
                 'subject' => 'required|string|max:255',
                 'title' => 'nullable|string|max:255',
-                'body_rendered' => $supportsTemplate ? 'nullable|string' : 'nullable',
-                'page_count' => $supportsTemplate ? 'nullable|integer|min:1|max:999' : 'nullable',
-                'scan_file' => 'bail|nullable|required_if:creation_method,scan|file|mimes:pdf|max:10240',
+                'scan_file' => 'bail|' . (($requirements->required($context, 'scan_file') ? 'required' : 'nullable') . '|file|mimes:pdf|max:10240'),
                 'targets' => $isInternal ? 'required|array|min:1' : 'nullable|array',
                 'targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
                 'targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
-                'cc_targets' => $isInternal ? 'nullable|array' : 'nullable|array',
-                'cc_targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
-                'cc_targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
+                'cc_targets' => $isInternal || $isOutgoing ? 'nullable|array' : 'nullable|array',
+                'cc_targets.*.target_type' => $isInternal || $isOutgoing ? $targetRules : 'nullable',
+                'cc_targets.*.target_id' => $isInternal || $isOutgoing ? 'required|integer' : 'nullable',
                 'payload' => 'nullable|array',
                 'payload.origin_name' => $type === 'incoming_external' && ! $isArchive ? 'required|string|max:255' : 'nullable|string|max:255',
                 'payload.internal_origin_type' => $isInternal || $isOutgoing ? 'required|in:directorate,division,department' : 'nullable',
                 'payload.internal_origin_id' => $isInternal || $isOutgoing ? 'required|integer' : 'nullable',
                 'payload.external_recipient' => $isOutgoing ? 'required|string|max:255' : 'nullable|string|max:255',
                 'payload.notes' => in_array($type, ['incoming_external'], true) ? 'nullable|string' : 'nullable',
+                'signature_requests' => $isInternal ? 'nullable|array' : 'prohibited',
+                'signature_requests.*.signer_user_id' => $isInternal ? 'required|exists:users,id,status,active,role,pegawai' : 'prohibited',
+                'signature_requests.*.signing_order' => $isInternal ? 'required|integer|min:1|distinct' : 'prohibited',
+                'signature_requests.*.page_number' => $isInternal ? 'required|integer|min:1' : 'prohibited',
+                'signature_requests.*.x' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
+                'signature_requests.*.y' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
+                'signature_requests.*.width' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
+                'signature_requests.*.height' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
             ], $this->uploadValidationMessages());
         } catch (ValidationException $exception) {
             $this->logUploadValidationFailure($request, $exception);
             throw $exception;
         }
 
-        $letter = DB::transaction(function () use ($request, $validated, $isInternal, $isOutgoing, $supportsTemplate) {
+        $letter = DB::transaction(function () use ($request, $validated, $isInternal, $isOutgoing) {
             $user = $request->user();
-            $letterType = LetterType::query()->findOrFail($validated['letter_type_id']);
             $letterNumber = $validated['letter_number'] ?? null;
-
-            if (! $letterNumber && $validated['type'] !== 'incoming_external') {
-                $letterNumber = app(LetterNumberGenerator::class)->generate(
-                    $letterType,
-                    $user,
-                    ($validated['is_archive'] ?? false) ? 'archive' : $validated['type'],
-                    $validated['payload'] ?? []
-                );
-            }
 
             $letter = Letter::create([
                 'type' => $validated['type'],
-                'creation_method' => $validated['creation_method'],
                 'letter_type_id' => $validated['letter_type_id'],
-                'letter_template_id' => $supportsTemplate ? ($validated['letter_template_id'] ?? null) : null,
                 'created_by' => $user->id,
                 'origin_directorate_id' => $user->directorate_id,
                 'origin_division_id' => $user->division_id,
@@ -171,12 +145,11 @@ class LetterController extends Controller
                 'subject' => $validated['subject'],
                 'letter_number' => $letterNumber,
                 'reference' => Str::uuid()->toString(),
-                'page_count' => $supportsTemplate && $validated['creation_method'] === 'template' ? max(1, (int) ($validated['page_count'] ?? 1)) : 1,
+                'page_count' => 1,
                 'status' => match (true) {
                     $isInternal || $isOutgoing => ($validated['submit_action'] === 'draft' ? 'draft' : 'sent'),
                     default => ($validated['is_archive'] ?? false) ? 'archived' : 'received',
                 },
-                'body_rendered' => $supportsTemplate ? ($validated['body_rendered'] ?? null) : null,
                 'payload' => $validated['payload'] ?? [],
                 'meta' => ['source' => 'admin'],
             ]);
@@ -186,8 +159,27 @@ class LetterController extends Controller
                     $letter->targets()->create($target + ['kind' => 'recipient']);
                 }
 
+            }
+
+            if ($isInternal || $isOutgoing) {
                 foreach ($validated['cc_targets'] ?? [] as $target) {
                     $letter->targets()->create($target + ['kind' => 'cc']);
+                }
+            }
+
+            if ($isInternal) {
+                foreach ($validated['signature_requests'] ?? [] as $signatureRequest) {
+                    $letter->signatureRequests()->create([
+                        'requested_by' => $user->id,
+                        'signer_user_id' => (int) $signatureRequest['signer_user_id'],
+                        'signing_order' => (int) $signatureRequest['signing_order'],
+                        'page_number' => (int) $signatureRequest['page_number'],
+                        'x' => (float) $signatureRequest['x'],
+                        'y' => (float) $signatureRequest['y'],
+                        'width' => (float) $signatureRequest['width'],
+                        'height' => (float) $signatureRequest['height'],
+                        'status' => 'pending',
+                    ]);
                 }
             }
 
@@ -203,8 +195,12 @@ class LetterController extends Controller
                 ]);
             }
 
-            if ($isInternal && $letter->status === 'sent') {
-                $notificationUserIds = $this->resolveTargetUsers(collect($validated['targets'])->merge($validated['cc_targets'] ?? []))
+            if ($isInternal && $letter->signatureRequests()->exists()) {
+                app(LetterSignatureService::class)->initializeRequests($letter);
+            }
+
+            if (($isInternal || $isOutgoing) && $letter->status === 'sent' && ! ($isInternal && $letter->signatureRequests()->exists())) {
+                $notificationUserIds = $this->resolveTargetUsers(collect($validated['targets'] ?? [])->merge($validated['cc_targets'] ?? []))
                     ->reject(fn ($id) => (int) $id === (int) $user->id)
                     ->unique()
                     ->values();
@@ -227,33 +223,10 @@ class LetterController extends Controller
         return redirect()->route('admin.surat.show', $letter)->with('success', 'Surat berhasil dibuat.');
     }
 
-    public function previewLetterNumber(Request $request, LetterNumberGenerator $generator): JsonResponse
-    {
-        $validated = $request->validate([
-            'letter_type_id' => 'required|exists:letter_types,id',
-            'context' => 'required|in:incoming_external,internal,outgoing,archive',
-            'payload' => 'nullable|array',
-        ]);
-
-        if ($validated['context'] === 'incoming_external') {
-            return response()->json(['letter_number' => null]);
-        }
-
-        return response()->json([
-            'letter_number' => $generator->preview(
-                LetterType::query()->findOrFail($validated['letter_type_id']),
-                $request->user(),
-                $validated['context'],
-                $validated['payload'] ?? []
-            ),
-        ]);
-    }
-
     public function show(Letter $letter, DispositionService $dispositionService)
     {
         $letter->load([
             'creator:id,name,username',
-            'template:id,name,category',
             'letterType:id,name',
             'targets',
             'attachments',
@@ -261,6 +234,8 @@ class LetterController extends Controller
             'dispositions.fromDirectorate',
             'dispositions.fromDivision',
             'dispositions.fromDepartment',
+            'signatureRequests.signer:id,name,username,position',
+            'signatureRequests.requester:id,name,username',
             'readReceipts' => fn ($query) => $query->where('user_id', '!=', $letter->created_by),
             'readReceipts.user:id,name,username,position',
         ]);
@@ -269,10 +244,6 @@ class LetterController extends Controller
             'letter' => $letter,
             'targetOptions' => $this->targetOptions(),
             'dispositionTargetOptions' => $dispositionService->optionsFor(auth()->user(), true, $letter),
-            'notifications' => NotificationLog::with('user:id,name,username')
-                ->where('letter_id', $letter->id)
-                ->latest()
-                ->get(),
         ]);
     }
 

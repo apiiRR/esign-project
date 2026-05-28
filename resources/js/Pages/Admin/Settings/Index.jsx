@@ -9,7 +9,6 @@ export default function SettingsIndex() {
         company_name: setting?.company_name || "",
         company_code: setting?.company_code || "",
         company_logo: null,
-        enable_letter_template_method: Boolean(setting?.enable_letter_template_method),
         letter_field_requirements: letterFieldRequirements || {},
         _method: "PUT",
     });
@@ -43,7 +42,7 @@ export default function SettingsIndex() {
                 <form onSubmit={submit} className="space-y-6">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-950">Settings Aplikasi</h1>
-                        <p className="mt-2 text-sm text-gray-600">Pengaturan inti untuk identitas aplikasi dan logo pada Nota Dinas.</p>
+                        <p className="mt-2 text-sm text-gray-600">Pengaturan inti untuk identitas dan logo aplikasi.</p>
                     </div>
 
                     <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -53,7 +52,7 @@ export default function SettingsIndex() {
                             </div>
                             <div>
                                 <h2 className="font-semibold text-gray-950">Identitas Utama</h2>
-                                <p className="text-xs text-gray-500">Field ini dipakai untuk login shell, header aplikasi, dan preview template surat.</p>
+                                <p className="text-xs text-gray-500">Field ini dipakai untuk login shell dan header aplikasi.</p>
                             </div>
                         </div>
 
@@ -63,31 +62,15 @@ export default function SettingsIndex() {
                             <Field label="Kode Perusahaan" value={data.company_code} onChange={(v) => setData("company_code", v)} error={errors.company_code} />
                         </div>
 
-                        <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                            <label className="flex items-start gap-3">
-                                <input
-                                    type="checkbox"
-                                    checked={data.enable_letter_template_method}
-                                    onChange={(e) => setData("enable_letter_template_method", e.target.checked)}
-                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-700 focus:ring-emerald-600"
-                                />
-                                <span>
-                                    <span className="block text-sm font-semibold text-gray-900">Aktifkan metode Buat dari Template</span>
-                                    <span className="mt-1 block text-xs text-gray-500">Jika nonaktif, pegawai dan admin hanya bisa memilih Scan Surat untuk surat internal.</span>
-                                </span>
-                            </label>
-                            {errors.enable_letter_template_method ? <p className="mt-2 text-xs text-red-600">{errors.enable_letter_template_method}</p> : null}
-                        </div>
-
                         <div className="mt-5 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-5">
                             <label className="flex cursor-pointer items-center gap-3">
                                 <Upload className="h-5 w-5 text-gray-500" />
-                                <span className="text-sm text-gray-700">{data.company_logo?.name || "Upload logo perusahaan untuk Nota Dinas"}</span>
+                                <span className="text-sm text-gray-700">{data.company_logo?.name || "Upload logo aplikasi/perusahaan"}</span>
                                 <input type="file" className="hidden" accept="image/png,image/jpeg,image/jpg" onChange={(e) => setData("company_logo", e.target.files[0])} />
                             </label>
                             {setting?.company_logo ? (
                                 <div className="mt-4 flex items-center gap-3 rounded-lg bg-white p-3">
-                                    <img src={`/storage/settings/${setting.company_logo}`} alt="Logo perusahaan" className="h-12 w-24 object-contain" />
+                                    <img src={`/storage/settings/${setting.company_logo}`} alt="Logo aplikasi" className="h-12 w-24 object-contain" />
                                     <span className="text-xs text-gray-500">Logo saat ini</span>
                                 </div>
                             ) : null}

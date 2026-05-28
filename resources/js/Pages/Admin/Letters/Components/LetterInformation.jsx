@@ -26,7 +26,7 @@ export default function LetterInformation(letter) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                     <label className="text-sm font-medium text-gray-500">Jenis Surat</label>
-                    <p className="text-gray-900 font-semibold">{letter.template?.name || '-'}</p>
+                    <p className="text-gray-900 font-semibold">{letter.letter_type?.name || '-'}</p>
                 </div>
 
                 <div>

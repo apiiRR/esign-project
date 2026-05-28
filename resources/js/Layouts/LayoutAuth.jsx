@@ -4,8 +4,7 @@ import { Link } from "@inertiajs/react";
 // import usePage dari inertiajs
 import { usePage } from "@inertiajs/react";
 
-// import icon dari lucide react
-import { Building2 } from "lucide-react";
+import ApplicationLogo from "@/Components/ApplicationLogo";
 
 export default function LayoutAuth({ children }) {
     // get page props "settings"
@@ -23,20 +22,7 @@ export default function LayoutAuth({ children }) {
                                 href="/"
                                 className="block mb-4 bg-slate-700 p-3 rounded-2xl"
                             >
-                                {settings?.company_logo ? (
-                                    <img
-                                        width={80}
-                                        height={"auto"}
-                                        src={`/storage/settings/${settings.company_logo}`}
-                                        alt={`Logo ${settings.company_name}`}
-                                        className="object-contain"
-                                    />
-                                ) : (
-                                    <Building2
-                                        size={80}
-                                        className="text-white p-2"
-                                    />
-                                )}
+                                <ApplicationLogo className="h-20 w-20" iconClassName="h-12 w-12" imageClassName="h-20 w-20 object-contain" />
                             </Link>
                             <p className="text-center text-gray-400">
                                 Sistem Surat & Arsip Digital{" "}

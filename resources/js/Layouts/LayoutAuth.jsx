@@ -25,7 +25,7 @@ export default function LayoutAuth({ children }) {
                                 <ApplicationLogo className="h-20 w-20" iconClassName="h-12 w-12" imageClassName="h-20 w-20 object-contain" />
                             </Link>
                             <p className="text-center text-gray-400">
-                                Sistem Surat & Arsip Digital{" "}
+                                Sistem SADIKA{" "}
                                 <strong>{settings?.company_name || "PT Berdikari"}</strong> - Hak
                                 Cipta {new Date().getFullYear()} &copy;
                                 Dilindungi Undang-Undang.

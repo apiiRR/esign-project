@@ -67,7 +67,7 @@ export default function LayoutPegawai({ children }) {
                         </div>
                         <div>
                             <div className="text-sm font-bold uppercase text-gray-950">PT Berdikari</div>
-                            <div className="text-xs text-gray-500">Surat & Arsip Digital</div>
+                            <div className="text-xs text-gray-500">SADIKA</div>
                         </div>
                     </Link>
 

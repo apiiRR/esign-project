@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('settings', function (Blueprint $table) {
             $table->id();
-            $table->string('app_name')->default('Surat & Arsip Digital');
+            $table->string('app_name')->default('SADIKA — Surat dan Arsip Digital Berdikari');
             $table->string('company_name');
             $table->string('company_code')->default('BDRK');
             $table->string('company_logo')->nullable();

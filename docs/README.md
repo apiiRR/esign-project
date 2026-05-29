@@ -1,6 +1,6 @@
 # Dokumentasi Teknis Project
 
-Dokumentasi ini menjelaskan struktur teknis aplikasi Surat & Arsip Digital PT Berdikari tanpa menambah komentar berlebihan di source code.
+Dokumentasi ini menjelaskan struktur teknis aplikasi SADIKA — Surat dan Arsip Digital Berdikari tanpa menambah komentar berlebihan di source code.
 
 ## Daftar Dokumen
 

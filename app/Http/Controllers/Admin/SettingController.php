@@ -145,7 +145,7 @@ class SettingController extends Controller implements HasMiddleware
     private function setting(): Setting
     {
         return Setting::firstOrCreate([], [
-            'app_name' => 'Surat & Arsip Digital',
+            'app_name' => 'SADIKA — Surat dan Arsip Digital Berdikari',
             'company_name' => 'PT Berdikari',
             'company_code' => 'BDRK',
             'letter_field_requirements' => app(LetterFieldRequirementService::class)->defaults(),

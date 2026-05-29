@@ -24,7 +24,7 @@ export default function Logo() {
                         PT Berdikari
                     </h1>
                     <p className="text-xs text-gray-500 font-medium italic mt-0.5">
-                        Surat & Arsip Digital
+                        SADIKA
                     </p>
                 </div>
             </div>

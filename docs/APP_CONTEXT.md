@@ -1,8 +1,8 @@
-# Context Aplikasi Surat & Arsip Digital PT Berdikari
+# Context Aplikasi SADIKA — Surat dan Arsip Digital Berdikari
 
 ## Ringkasan Aplikasi
 
-Surat & Arsip Digital PT Berdikari adalah aplikasi web untuk mengelola surat perusahaan secara digital. Aplikasi ini mencakup surat masuk eksternal, surat internal, surat keluar, arsip scan PDF, disposisi, publish surat ke unit organisasi, status baca, dan notifikasi.
+SADIKA — Surat dan Arsip Digital Berdikari adalah aplikasi web untuk mengelola surat perusahaan secara digital. Aplikasi ini mencakup surat masuk eksternal, surat internal, surat keluar, arsip scan PDF, disposisi, publish surat ke unit organisasi, status baca, dan notifikasi.
 
 Aplikasi dibuat untuk mendukung kebutuhan organisasi yang dinamis. Karena pegawai dapat berpindah posisi, akses bisnis surat sebisa mungkin berbasis unit organisasi seperti direktorat, divisi, department, atau jabatan unit, bukan melekat permanen ke satu orang. User tetap dicatat sebagai aktor aktivitas seperti pembuat surat, pembaca surat, pengirim disposisi, dan penerima notifikasi.
 

@@ -64,7 +64,7 @@ export default function AdminDocumentation() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Admin</h1>
                                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                                    Panduan operasional admin untuk mengelola user, master data, surat, notifikasi, log teknis, dan pengaturan aplikasi Surat & Arsip Digital PT Berdikari.
+                                    Panduan operasional admin untuk mengelola user, master data, surat, notifikasi, log teknis, dan pengaturan aplikasi SADIKA.
                                 </p>
                             </div>
                         </div>

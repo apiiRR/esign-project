@@ -66,7 +66,7 @@ export default function PegawaiDocumentation() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Pegawai</h1>
                                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                                    Panduan penggunaan portal pegawai untuk menerima, membaca, membuat, mengirim, dan mengarsipkan surat di aplikasi Surat & Arsip Digital PT Berdikari.
+                                    Panduan penggunaan portal pegawai untuk menerima, membaca, membuat, mengirim, dan mengarsipkan surat di aplikasi SADIKA.
                                 </p>
                             </div>
                         </div>

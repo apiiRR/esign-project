@@ -47,7 +47,7 @@ export default function Login() {
                         <div>
                             <div className="mb-8 text-center">
                                 <h1 className="mb-3 text-3xl font-bold text-gray-900">
-                                    Surat & Arsip Digital
+                                    SADIKA
                                 </h1>
                                 <p className="text-gray-600">
                                     Masuk ke aplikasi persuratan PT Berdikari

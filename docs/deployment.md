@@ -1,6 +1,6 @@
 # Deployment dan Operasional
 
-Dokumen ini menjelaskan cara menjalankan aplikasi Surat & Arsip Digital di local development dan production Docker.
+Dokumen ini menjelaskan cara menjalankan aplikasi SADIKA — Surat dan Arsip Digital Berdikari di local development dan production Docker.
 
 ## Local Development
 
@@ -65,7 +65,7 @@ cp .env.production.example .env.production
 Edit nilai penting:
 
 ```env
-APP_NAME="Surat & Arsip Digital"
+APP_NAME="SADIKA — Surat dan Arsip Digital Berdikari"
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://domain-anda.com

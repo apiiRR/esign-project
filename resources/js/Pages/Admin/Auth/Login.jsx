@@ -31,7 +31,7 @@ export default function Login() {
 
     return (
         <>
-            <Head title={`Login - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title="Login - SADIKA" />
             <LayoutAuth>
                 <div className="flex flex-col flex-1">
                     <div className="w-full max-w-md pt-10 mx-auto">
@@ -46,8 +46,8 @@ export default function Login() {
                     <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
                         <div>
                             <div className="mb-8 text-center">
-                                <h1 className="mb-3 text-3xl font-bold text-gray-900">
-                                    SADIKA
+                                <h1 className="mx-auto mb-3 max-w-sm text-balance text-2xl font-bold leading-tight text-gray-900 sm:text-3xl">
+                                    Surat dan Arsip Digital Berdikari
                                 </h1>
                                 <p className="text-gray-600">
                                     Masuk ke aplikasi persuratan PT Berdikari

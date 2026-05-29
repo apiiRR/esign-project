@@ -1,4 +1,4 @@
-# SADIKA — Surat dan Arsip Digital Berdikari
+# Surat dan Arsip Digital Berdikari
 
 Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, Tailwind CSS, dan PWA untuk PT Berdikari. Aplikasi ini mengelola surat masuk eksternal, surat internal, surat keluar, arsip scan, disposisi, status baca, template Nota Dinas, nomor surat otomatis, log teknis, dan notifikasi dasar.
 

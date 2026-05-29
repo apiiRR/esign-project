@@ -14,7 +14,7 @@ class MailSettingsService
     public function setting(): Setting
     {
         return Setting::query()->firstOrCreate([], [
-            'app_name' => 'SADIKA — Surat dan Arsip Digital Berdikari',
+            'app_name' => 'Surat dan Arsip Digital Berdikari',
             'company_name' => 'PT Berdikari',
             'company_code' => 'BDRK',
             'letter_field_requirements' => app(LetterFieldRequirementService::class)->defaults(),

@@ -1,4 +1,5 @@
-import { Head, Link, usePage } from "@inertiajs/react";
+import { Head, Link, router, usePage } from "@inertiajs/react";
+import { useState } from "react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
 import hasAnyPermission from "@/Utils/Permission";
 import Search from "@/Shared/Search";
@@ -6,9 +7,13 @@ import Pagination from "@/Shared/Pagination";
 import Delete from "@/Shared/Delete";
 import {
     Building2,
+    Download,
     Edit,
+    FileDown,
+    FileSpreadsheet,
     Mail,
     Shield,
+    Upload,
     UserCheck,
     Users,
 } from "lucide-react";
@@ -20,6 +25,20 @@ function roleLabel(user) {
 export default function UsersIndex() {
     const { users, filterOptions = {} } = usePage().props;
     const rows = users?.data || [];
+    const [importProcessing, setImportProcessing] = useState(false);
+    const [importErrors, setImportErrors] = useState(null);
+    const exportUrl = (format) => `/admin/master-data/users/export${window.location.search ? `${window.location.search}&format=${format}` : `?format=${format}`}`;
+    const submitImport = (file) => {
+        if (!file) return;
+        setImportProcessing(true);
+        setImportErrors(null);
+        router.post("/admin/master-data/users/import", { import_file: file }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onError: (errors) => setImportErrors(errors.import_file || "Import gagal."),
+            onFinish: () => setImportProcessing(false),
+        });
+    };
 
     return (
         <>
@@ -33,13 +52,45 @@ export default function UsersIndex() {
                                 Kelola akun, role akses, assignment organisasi, dan status pengguna PT Berdikari.
                             </p>
                         </div>
-                        {hasAnyPermission(["users.create"]) ? (
-                            <Link href="/admin/users/create" className="inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">
-                                <Users className="mr-2 h-4 w-4" />
-                                Tambah User
-                            </Link>
-                        ) : null}
+                        <div className="flex flex-wrap gap-2">
+                            <a href={exportUrl("xlsx")} className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                Export Excel
+                            </a>
+                            <a href={exportUrl("csv")} className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <Download className="mr-2 h-4 w-4" />
+                                Export CSV
+                            </a>
+                            <a href="/admin/master-data/users/template" className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+                                <FileDown className="mr-2 h-4 w-4" />
+                                Download Template
+                            </a>
+                            <label className={`inline-flex items-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 ${importProcessing ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+                                <Upload className="mr-2 h-4 w-4" />
+                                {importProcessing ? "Import..." : "Import"}
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".xlsx,.xls,.csv,.txt"
+                                    disabled={importProcessing}
+                                    onChange={(event) => submitImport(event.target.files?.[0])}
+                                />
+                            </label>
+                            {hasAnyPermission(["users.create"]) ? (
+                                <Link href="/admin/users/create" className="inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800">
+                                    <Users className="mr-2 h-4 w-4" />
+                                    Tambah User
+                                </Link>
+                            ) : null}
+                        </div>
                     </div>
+                    {importErrors ? (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {Array.isArray(importErrors)
+                                ? importErrors.map((message) => <div key={message}>{message}</div>)
+                                : importErrors}
+                        </div>
+                    ) : null}
 
                     <div className="grid gap-4 md:grid-cols-4">
                         {[

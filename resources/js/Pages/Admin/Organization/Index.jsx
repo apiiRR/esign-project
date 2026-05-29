@@ -1,7 +1,7 @@
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import { useState } from "react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
-import { Edit, Save, Trash2, X } from "lucide-react";
+import { Download, Edit, FileDown, FileSpreadsheet, Save, Trash2, Upload, X } from "lucide-react";
 import Search from "@/Shared/Search";
 
 const labels = {
@@ -14,6 +14,8 @@ export default function OrganizationIndex() {
     const { type, directorates, divisions, departments, users, filterOptions = {} } = usePage().props;
     const rows = type === "directorates" ? directorates : type === "divisions" ? divisions : departments;
     const [editing, setEditing] = useState(null);
+    const [importProcessing, setImportProcessing] = useState(false);
+    const [importErrors, setImportErrors] = useState(null);
     const { data, setData, post, put, processing, errors, reset } = useForm({
         name: "",
         directorate_id: directorates?.[0]?.id || "",
@@ -35,6 +37,20 @@ export default function OrganizationIndex() {
         }
 
         post(`/admin/organisasi/${type}`, { preserveScroll: true, onSuccess: () => reset("name") });
+    };
+
+    const exportUrl = (format) => `/admin/master-data/${type}/export${window.location.search ? `${window.location.search}&format=${format}` : `?format=${format}`}`;
+
+    const submitImport = (file) => {
+        if (!file) return;
+        setImportProcessing(true);
+        setImportErrors(null);
+        router.post(`/admin/master-data/${type}/import`, { import_file: file }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onError: (errors) => setImportErrors(errors.import_file || "Import gagal."),
+            onFinish: () => setImportProcessing(false),
+        });
     };
 
     const startEdit = (row) => {
@@ -61,10 +77,44 @@ export default function OrganizationIndex() {
             <Head title={`${labels[type]} - Admin`} />
             <LayoutAdmin>
                 <div className="space-y-6">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-950">{labels[type]}</h1>
-                        <p className="mt-2 text-sm text-gray-600">Kelola master organisasi dan pejabat unit. Field pejabat unit dapat terisi otomatis dari form User saat jabatan organisasi disimpan.</p>
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-950">{labels[type]}</h1>
+                            <p className="mt-2 text-sm text-gray-600">Kelola master organisasi dan pejabat unit. Field pejabat unit dapat terisi otomatis dari form User saat jabatan organisasi disimpan.</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <a href={exportUrl("xlsx")} className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                Export Excel
+                            </a>
+                            <a href={exportUrl("csv")} className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                <Download className="mr-2 h-4 w-4" />
+                                Export CSV
+                            </a>
+                            <a href={`/admin/master-data/${type}/template`} className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+                                <FileDown className="mr-2 h-4 w-4" />
+                                Download Template
+                            </a>
+                            <label className={`inline-flex items-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800 ${importProcessing ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+                                <Upload className="mr-2 h-4 w-4" />
+                                {importProcessing ? "Import..." : "Import"}
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".xlsx,.xls,.csv,.txt"
+                                    disabled={importProcessing}
+                                    onChange={(event) => submitImport(event.target.files?.[0])}
+                                />
+                            </label>
+                        </div>
                     </div>
+                    {importErrors ? (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            {Array.isArray(importErrors)
+                                ? importErrors.map((message) => <div key={message}>{message}</div>)
+                                : importErrors}
+                        </div>
+                    ) : null}
 
                     <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                         <Search URL={`/admin/organisasi/${type}`} filters={[

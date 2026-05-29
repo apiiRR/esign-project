@@ -77,6 +77,15 @@ Route::prefix('admin')->name('admin.')->group(function() {
         Route::get('/organisasi/{type}', [App\Http\Controllers\Admin\OrganizationController::class, 'index'])
             ->whereIn('type', ['directorates', 'divisions', 'departments'])
             ->name('organization.index');
+        Route::get('/master-data/{type}/export', [App\Http\Controllers\Admin\MasterDataImportExportController::class, 'export'])
+            ->whereIn('type', ['directorates', 'divisions', 'departments', 'users'])
+            ->name('master-data.export');
+        Route::get('/master-data/{type}/template', [App\Http\Controllers\Admin\MasterDataImportExportController::class, 'template'])
+            ->whereIn('type', ['directorates', 'divisions', 'departments', 'users'])
+            ->name('master-data.template');
+        Route::post('/master-data/{type}/import', [App\Http\Controllers\Admin\MasterDataImportExportController::class, 'import'])
+            ->whereIn('type', ['directorates', 'divisions', 'departments', 'users'])
+            ->name('master-data.import');
         Route::post('/organisasi/{type}', [App\Http\Controllers\Admin\OrganizationController::class, 'store'])
             ->whereIn('type', ['directorates', 'divisions', 'departments'])
             ->name('organization.store');

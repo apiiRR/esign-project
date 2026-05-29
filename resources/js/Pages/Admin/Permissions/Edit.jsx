@@ -30,7 +30,7 @@ export default function PermissionsEdit() {
 
     return (
         <>
-            <Head title={`Edit Permission - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Edit Permission - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
 
                 {/* Header */}

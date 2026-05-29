@@ -19,12 +19,12 @@ export default function Logo() {
                     </div>
                 </div>
                 
-                <div className="ml-3">
+                <div className="ml-3 min-w-0">
                     <h1 className="text-md uppercase font-bold text-gray-900">
                         PT Berdikari
                     </h1>
-                    <p className="text-xs text-gray-500 font-medium italic mt-0.5">
-                        SADIKA
+                    <p className="mt-0.5 max-w-[170px] break-words text-[11px] font-medium leading-tight text-gray-500">
+                        Surat dan Arsip Digital Berdikari
                     </p>
                 </div>
             </div>

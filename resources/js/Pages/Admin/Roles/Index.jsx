@@ -29,7 +29,7 @@ export default function RolesIndex() {
 
     return (
         <>
-            <Head title={`Roles - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Roles - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
 
                 {/* Header */}

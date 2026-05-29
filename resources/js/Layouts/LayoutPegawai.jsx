@@ -61,13 +61,15 @@ export default function LayoutPegawai({ children }) {
         <div className="min-h-screen bg-gray-100">
             <header className="sticky top-0 z-40 border-b border-gray-200 bg-white">
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-                    <Link href="/pegawai/dashboard" className="flex items-center gap-3">
+                    <Link href="/pegawai/dashboard" className="flex min-w-0 items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
                             <ApplicationLogo className="h-10 w-10" iconClassName="h-5 w-5" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <div className="text-sm font-bold uppercase text-gray-950">PT Berdikari</div>
-                            <div className="text-xs text-gray-500">SADIKA</div>
+                            <div className="max-w-[180px] break-words text-[11px] leading-tight text-gray-500">
+                                Surat dan Arsip Digital Berdikari
+                            </div>
                         </div>
                     </Link>
 

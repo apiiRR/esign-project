@@ -27,7 +27,7 @@ export default function PermissionsCreate() {
 
     return (
         <>
-            <Head title={`Tambah Permission - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Tambah Permission - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
 
                 {/* Header */}

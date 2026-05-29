@@ -54,7 +54,7 @@ export default function RolesCreate() {
 
     return (
         <>
-            <Head title={`Tambah Role - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Tambah Role - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
 
                 {/* Header */}

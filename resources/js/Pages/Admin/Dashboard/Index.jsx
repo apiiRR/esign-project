@@ -15,7 +15,7 @@ export default function Dashboard() {
 
     return (
         <>
-            <Head title={`Dashboard - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Dashboard - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
                 <div className="space-y-6">
                     <div>

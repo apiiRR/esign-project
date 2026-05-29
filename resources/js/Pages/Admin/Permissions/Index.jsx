@@ -32,7 +32,7 @@ export default function PermissionsIndex() {
 
     return (
         <>
-            <Head title={`Permissions - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Permissions - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
 
                 {/* Header */}

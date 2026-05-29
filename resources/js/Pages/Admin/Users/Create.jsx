@@ -33,7 +33,7 @@ export default function UsersCreate() {
 
     return (
         <>
-            <Head title={`Tambah User - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Tambah User - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
                 <div className="space-y-6">
                     <div>

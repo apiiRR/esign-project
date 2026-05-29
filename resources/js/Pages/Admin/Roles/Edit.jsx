@@ -54,7 +54,7 @@ export default function RolesEdit() {
 
     return (
         <>
-            <Head title={`Edit Role - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Edit Role - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
 
                 {/* Header */}

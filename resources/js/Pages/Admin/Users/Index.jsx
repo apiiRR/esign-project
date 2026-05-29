@@ -23,7 +23,7 @@ export default function UsersIndex() {
 
     return (
         <>
-            <Head title={`Users - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Users - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
                 <div className="space-y-6">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

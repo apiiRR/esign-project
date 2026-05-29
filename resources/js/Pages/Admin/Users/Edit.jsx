@@ -33,7 +33,7 @@ export default function UsersEdit() {
 
     return (
         <>
-            <Head title={`Edit User - ${import.meta.env.VITE_APP_NAME}`} />
+            <Head title={`Edit User - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
             <LayoutAdmin>
                 <div className="space-y-6">
                     <div>

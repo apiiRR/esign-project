@@ -69,6 +69,7 @@ APP_NAME="Surat dan Arsip Digital Berdikari"
 APP_ENV=production
 APP_DEBUG=false
 APP_URL=https://domain-anda.com
+ASSET_URL=https://domain-anda.com
 APP_HTTP_PORT=8080
 
 APP_KEY=base64:isi-dengan-key-production
@@ -181,11 +182,12 @@ Nama volume bisa berbeda mengikuti nama folder project. Cek dengan:
 docker volume ls
 ```
 
-## SSL dan Domain
+## SSL, Cloudflare Tunnel, dan Domain
 
 Container `nginx` hanya expose HTTP internal/VM. SSL sebaiknya ditangani oleh salah satu opsi berikut:
 
 - Cloudflare proxy.
+- Cloudflare Tunnel atau `cloudflared`.
 - Caddy di host VM.
 - Nginx Proxy Manager.
 - Nginx host dengan Certbot.
@@ -194,6 +196,24 @@ Pastikan `APP_URL` memakai domain final, misalnya:
 
 ```env
 APP_URL=https://surat.perusahaan.com
+ASSET_URL=https://surat.perusahaan.com
+```
+
+Jika memakai Cloudflare Tunnel, arahkan tunnel ke service HTTP container, misalnya:
+
+```yaml
+ingress:
+  - hostname: sadika.ptberdikari.co.id
+    service: http://127.0.0.1:8080
+  - service: http_status:404
+```
+
+Laravel sudah dikonfigurasi untuk mempercayai header `X-Forwarded-*` dari proxy dan memaksa scheme HTTPS ketika `APP_ENV=production` serta `APP_URL` memakai `https://`. Setelah mengubah `.env.production`, refresh cache konfigurasi:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan config:clear
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan config:cache
+docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler nginx
 ```
 
 ## Catatan Queue

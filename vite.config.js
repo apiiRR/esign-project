@@ -16,8 +16,8 @@ export default defineConfig({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.ico', 'icons/pwa-icon.svg', 'icons/pwa-192x192.png', 'icons/pwa-512x512.png', 'offline.html'],
             manifest: {
-                name: 'Surat & Arsip Digital PT Berdikari',
-                short_name: 'Surat BDK',
+                name: 'Surat dan Arsip Digital Berdikari',
+                short_name: 'SADIKA',
                 description: 'Aplikasi persuratan dan arsip digital PT Berdikari.',
                 lang: 'id',
                 start_url: '/login',
@@ -43,6 +43,9 @@ export default defineConfig({
             workbox: {
                 navigateFallback: '/offline.html',
                 navigateFallbackDenylist: [/^\/storage\//, /^\/log-viewer/],
+                additionalManifestEntries: [
+                    { url: '/offline.html', revision: null },
+                ],
                 runtimeCaching: [
                     {
                         urlPattern: ({ request }) => ['style', 'script', 'worker', 'font', 'image'].includes(request.destination),

@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Inertia\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use App\Models\Setting;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -44,6 +45,18 @@ class HandleInertiaRequests extends Middleware
             $admin->loadMissing(['roles:id,name', 'directorate:id,name', 'division:id,name', 'department:id,name']);
         }
 
+        $settings = Schema::hasTable('settings')
+            ? (Setting::query()->first()?->toArray() ?: [
+                'app_name' => 'Surat dan Arsip Digital Berdikari',
+                'company_name' => 'PT Berdikari',
+                'company_logo' => null,
+            ])
+            : [
+                'app_name' => 'Surat dan Arsip Digital Berdikari',
+                'company_name' => 'PT Berdikari',
+                'company_logo' => null,
+            ];
+
         return [
             ...parent::share($request),
             //
@@ -63,7 +76,7 @@ class HandleInertiaRequests extends Middleware
             ],
 
             // settings
-            'settings' => Schema::hasTable('settings') ? \App\Models\Setting::first() : null,
+            'settings' => $settings,
         ];
     }
 }

@@ -1,6 +1,7 @@
 import { Link, usePage } from "@inertiajs/react";
 import { useState } from "react";
 import ApplicationLogo from "@/Components/ApplicationLogo";
+import { appName, companyName } from "@/Utils/appIdentity";
 import {
     Archive,
     Bell,
@@ -19,6 +20,7 @@ import {
 export default function LayoutPegawai({ children }) {
     const { url, props } = usePage();
     const user = props.auth?.user;
+    const settings = props.settings || {};
     const badges = props.pegawaiBadges || {};
     const [profileOpen, setProfileOpen] = useState(false);
     const [inboxOpen, setInboxOpen] = useState(false);
@@ -66,9 +68,9 @@ export default function LayoutPegawai({ children }) {
                             <ApplicationLogo className="h-10 w-10" iconClassName="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
-                            <div className="text-sm font-bold uppercase text-gray-950">PT Berdikari</div>
+                            <div className="text-sm font-bold uppercase text-gray-950">{companyName(settings)}</div>
                             <div className="max-w-[180px] break-words text-[11px] leading-tight text-gray-500">
-                                Surat dan Arsip Digital Berdikari
+                                {appName(settings)}
                             </div>
                         </div>
                     </Link>
@@ -148,7 +150,7 @@ export default function LayoutPegawai({ children }) {
                         </Link>
                         <div className="hidden text-right sm:block">
                             <div className="text-sm font-semibold text-gray-950">{user?.name || "Pegawai"}</div>
-                            <div className="text-xs text-gray-500">{user?.department?.name || user?.position || "PT Berdikari"}</div>
+                            <div className="text-xs text-gray-500">{user?.department?.name || user?.position || companyName(settings)}</div>
                         </div>
                         <div className="relative">
                             <button
@@ -163,7 +165,7 @@ export default function LayoutPegawai({ children }) {
                                 <div className="absolute right-0 z-50 mt-3 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
                                     <div className="border-b border-gray-100 px-4 py-3">
                                         <div className="truncate text-sm font-semibold text-gray-950">{user?.name || "Pegawai"}</div>
-                                        <div className="truncate text-xs text-gray-500">{user?.email || user?.username || "PT Berdikari"}</div>
+                                        <div className="truncate text-xs text-gray-500">{user?.email || user?.username || companyName(settings)}</div>
                                     </div>
                                     <Link href="/pegawai/dokumentasi" onClick={() => setProfileOpen(false)} className="flex w-full items-center px-4 py-3 text-sm font-medium text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">
                                         <BookOpen className="mr-3 h-4 w-4 text-gray-400" />

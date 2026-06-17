@@ -2,15 +2,17 @@
 import { useState } from "react";
 
 //import Head, Link, useForm dari inertiajs
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 
 //import layout auth
 import LayoutAuth from '@/Layouts/LayoutAuth';
+import { appName, companyName } from "@/Utils/appIdentity";
 
 //import icons
 import { MoveLeft, Eye, EyeOff, User, Lock, LogIn, Files } from 'lucide-react';
 
 export default function Login() {
+    const { settings } = usePage().props;
 
     //destruct useForm
     const { data, setData, post, processing, errors } = useForm({
@@ -31,7 +33,7 @@ export default function Login() {
 
     return (
         <>
-            <Head title="Login - SADIKA" />
+            <Head title={`Login - ${appName(settings)}`} />
             <LayoutAuth>
                 <div className="flex flex-col flex-1">
                     <div className="w-full max-w-md pt-10 mx-auto">
@@ -47,10 +49,10 @@ export default function Login() {
                         <div>
                             <div className="mb-8 text-center">
                                 <h1 className="mx-auto mb-3 max-w-sm text-balance text-2xl font-bold leading-tight text-gray-900 sm:text-3xl">
-                                    Surat dan Arsip Digital Berdikari
+                                    {appName(settings)}
                                 </h1>
                                 <p className="text-gray-600">
-                                    Masuk ke aplikasi persuratan PT Berdikari
+                                    Masuk ke aplikasi persuratan {companyName(settings)}
                                 </p>
                                 <div className="mx-auto mt-5 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
                                     <Files className="h-6 w-6" />
@@ -169,7 +171,7 @@ export default function Login() {
                         {/* Footer */}
                         <div className="mt-8 text-center">
                                 <p className="text-xs text-gray-500">
-                                © {new Date().getFullYear()} PT Berdikari. Hak Cipta Dilindungi.
+                                © {new Date().getFullYear()} {companyName(settings)}. Hak Cipta Dilindungi.
                             </p>
                         </div>
                     </div>

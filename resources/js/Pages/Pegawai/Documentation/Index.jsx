@@ -1,5 +1,6 @@
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
 import LayoutPegawai from "@/Layouts/LayoutPegawai";
+import { appName } from "@/Utils/appIdentity";
 import { Archive, BookOpen, CheckCheck, FilePlus2, Inbox, Mail, Send } from "lucide-react";
 
 const guides = [
@@ -53,6 +54,8 @@ const guides = [
 ];
 
 export default function PegawaiDocumentation() {
+    const { settings } = usePage().props;
+
     return (
         <>
             <Head title="Dokumentasi Pegawai" />
@@ -66,7 +69,7 @@ export default function PegawaiDocumentation() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Pegawai</h1>
                                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                                    Panduan penggunaan portal pegawai untuk menerima, membaca, membuat, mengirim, dan mengarsipkan surat di aplikasi SADIKA.
+                                    Panduan penggunaan portal pegawai untuk menerima, membaca, membuat, mengirim, dan mengarsipkan surat di aplikasi {appName(settings)}.
                                 </p>
                             </div>
                         </div>

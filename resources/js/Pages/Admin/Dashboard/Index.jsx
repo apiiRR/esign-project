@@ -1,9 +1,10 @@
 import { Head, Link, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
 import { Activity, Archive, Bell, Building2, FileInput, Mail, Users } from "lucide-react";
+import { appName } from "@/Utils/appIdentity";
 
 export default function Dashboard() {
-    const { stats, recentLetters, recentNotifications } = usePage().props;
+    const { stats, recentLetters, recentNotifications, settings } = usePage().props;
     const cards = [
         ["Surat Masuk Eksternal", stats.incoming_external, FileInput, "/admin/surat/masuk-eksternal"],
         ["Surat Internal", stats.internal, Mail, "/admin/surat/internal"],
@@ -15,7 +16,7 @@ export default function Dashboard() {
 
     return (
         <>
-            <Head title={`Dashboard - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Dashboard - ${appName(settings)}`} />
             <LayoutAdmin>
                 <div className="space-y-6">
                     <div>

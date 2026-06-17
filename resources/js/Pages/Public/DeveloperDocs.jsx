@@ -1,4 +1,5 @@
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
+import { appName, companyName } from "@/Utils/appIdentity";
 import { BookOpen, Code2, Database, GitBranch, Route, Server } from "lucide-react";
 
 const cards = [
@@ -36,9 +37,11 @@ const setup = [
 ];
 
 export default function DeveloperDocs() {
+    const { settings } = usePage().props;
+
     return (
         <>
-            <Head title="Developer Docs - Surat dan Arsip Digital Berdikari" />
+            <Head title={`Developer Docs - ${appName(settings)}`} />
             <div className="min-h-screen bg-gray-100">
                 <header className="border-b border-gray-200 bg-white">
                     <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -48,7 +51,7 @@ export default function DeveloperDocs() {
                             </div>
                             <div>
                                 <div className="text-sm font-bold uppercase text-gray-950">Developer Docs</div>
-                                <div className="text-xs text-gray-500">Surat dan Arsip Digital Berdikari</div>
+                                <div className="text-xs text-gray-500">{appName(settings)}</div>
                             </div>
                         </div>
                         <Link href="/login" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
@@ -66,7 +69,7 @@ export default function DeveloperDocs() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Developer</h1>
                                 <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-600">
-                                    Ringkasan teknis aplikasi persuratan dan arsip digital berbasis web/PWA untuk PT Berdikari. Halaman ini public agar developer dapat membaca setup dan arsitektur dasar tanpa login.
+                                    Ringkasan teknis aplikasi persuratan dan arsip digital berbasis web/PWA untuk {companyName(settings)}. Halaman ini public agar developer dapat membaca setup dan arsitektur dasar tanpa login.
                                 </p>
                             </div>
                         </div>

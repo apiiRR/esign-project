@@ -5,6 +5,7 @@ import { Link } from "@inertiajs/react";
 import { usePage } from "@inertiajs/react";
 
 import ApplicationLogo from "@/Components/ApplicationLogo";
+import { appName, companyName } from "@/Utils/appIdentity";
 
 export default function LayoutAuth({ children }) {
     // get page props "settings"
@@ -25,8 +26,8 @@ export default function LayoutAuth({ children }) {
                                 <ApplicationLogo className="h-20 w-20" iconClassName="h-12 w-12" imageClassName="h-20 w-20 object-contain" />
                             </Link>
                             <p className="text-center text-gray-400">
-                                Sistem SADIKA{" "}
-                                <strong>{settings?.company_name || "PT Berdikari"}</strong> - Hak
+                                Sistem {appName(settings)}{" "}
+                                <strong>{companyName(settings)}</strong> - Hak
                                 Cipta {new Date().getFullYear()} &copy;
                                 Dilindungi Undang-Undang.
                             </p>

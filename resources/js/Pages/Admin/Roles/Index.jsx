@@ -21,15 +21,16 @@ import Search from "@/Shared/Search";
 
 // import component Pagination
 import Pagination from "@/Shared/Pagination";
+import { appName } from "@/Utils/appIdentity";
 
 export default function RolesIndex() {
 
     // destruct props "roles"
-    const { roles } = usePage().props;
+    const { roles, settings } = usePage().props;
 
     return (
         <>
-            <Head title={`Roles - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Roles - ${appName(settings)}`} />
             <LayoutAdmin>
 
                 {/* Header */}

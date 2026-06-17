@@ -24,15 +24,16 @@ import Pagination from "@/Shared/Pagination";
 
 // import component Delete
 import Delete from "@/Shared/Delete";
+import { appName } from "@/Utils/appIdentity";
 
 export default function PermissionsIndex() {
 
     // destruct props "permissions" dari usePage
-    const { permissions } = usePage().props;
+    const { permissions, settings } = usePage().props;
 
     return (
         <>
-            <Head title={`Permissions - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Permissions - ${appName(settings)}`} />
             <LayoutAdmin>
 
                 {/* Header */}

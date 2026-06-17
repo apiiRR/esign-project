@@ -5,6 +5,7 @@ import hasAnyPermission from "@/Utils/Permission";
 import Search from "@/Shared/Search";
 import Pagination from "@/Shared/Pagination";
 import Delete from "@/Shared/Delete";
+import { appName, companyName } from "@/Utils/appIdentity";
 import {
     Building2,
     Download,
@@ -23,7 +24,7 @@ function roleLabel(user) {
 }
 
 export default function UsersIndex() {
-    const { users, filterOptions = {} } = usePage().props;
+    const { users, filterOptions = {}, settings } = usePage().props;
     const rows = users?.data || [];
     const [importProcessing, setImportProcessing] = useState(false);
     const [importErrors, setImportErrors] = useState(null);
@@ -42,14 +43,14 @@ export default function UsersIndex() {
 
     return (
         <>
-            <Head title={`Users - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Users - ${appName(settings)}`} />
             <LayoutAdmin>
                 <div className="space-y-6">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-950">Users Perusahaan</h1>
                             <p className="mt-2 text-sm text-gray-600">
-                                Kelola akun, role akses, assignment organisasi, dan status pengguna PT Berdikari.
+                                Kelola akun, role akses, assignment organisasi, dan status pengguna {companyName(settings)}.
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2">

@@ -1,5 +1,5 @@
 // import Head dan Link dari Inertia
-import { Head, Link, useForm } from "@inertiajs/react";
+import { Head, Link, useForm, usePage } from "@inertiajs/react";
 
 // import LayoutAdmin
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
@@ -9,8 +9,10 @@ import { Save } from "lucide-react";
 
 // import component PageHeader
 import PageHeader from "@/Shared/PageHeader";
+import { appName } from "@/Utils/appIdentity";
 
 export default function PermissionsCreate() {
+    const { settings } = usePage().props;
 
     // useForm untuk mengelola form data
     const { data, setData, post, processing, errors } = useForm({
@@ -27,7 +29,7 @@ export default function PermissionsCreate() {
 
     return (
         <>
-            <Head title={`Tambah Permission - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Tambah Permission - ${appName(settings)}`} />
             <LayoutAdmin>
 
                 {/* Header */}

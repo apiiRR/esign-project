@@ -3,6 +3,7 @@ import { Head, Link, useForm, usePage } from "@inertiajs/react";
 
 // import LayoutAdmin
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
+import { appName } from "@/Utils/appIdentity";
 
 // import icons
 import { Save } from "lucide-react";
@@ -13,7 +14,7 @@ import PageHeader from "@/Shared/PageHeader";
 export default function RolesEdit() {
 
     // props dari controller
-    const { role, permissions, rolePermissions } = usePage().props;
+    const { role, permissions, rolePermissions, settings } = usePage().props;
 
     // useForm untuk mengelola form data
     const { data, setData, put, processing, errors } = useForm({
@@ -54,7 +55,7 @@ export default function RolesEdit() {
 
     return (
         <>
-            <Head title={`Edit Role - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Edit Role - ${appName(settings)}`} />
             <LayoutAdmin>
 
                 {/* Header */}

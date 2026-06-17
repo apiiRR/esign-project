@@ -1,5 +1,6 @@
-import { Head } from "@inertiajs/react";
+import { Head, usePage } from "@inertiajs/react";
 import ApplicationLogo from "@/Components/ApplicationLogo";
+import { companyName } from "@/Utils/appIdentity";
 import { CheckCircle2 } from "lucide-react";
 
 function formatDate(value) {
@@ -19,6 +20,8 @@ function letterDisplayNumber(letter) {
 }
 
 export default function SignatureVerification({ signature, letter }) {
+    const { settings } = usePage().props;
+
     return (
         <div className="min-h-screen bg-gray-100 px-4 py-10">
             <Head title="Verifikasi Tanda Tangan" />
@@ -27,7 +30,7 @@ export default function SignatureVerification({ signature, letter }) {
                     <div className="flex items-center gap-3">
                         <ApplicationLogo className="h-10 w-10" iconClassName="h-5 w-5" />
                         <div>
-                            <div className="text-sm font-bold uppercase text-gray-950">PT Berdikari</div>
+                            <div className="text-sm font-bold uppercase text-gray-950">{companyName(settings)}</div>
                             <div className="text-xs text-gray-500">Verifikasi Tanda Tangan Elektronik</div>
                         </div>
                     </div>

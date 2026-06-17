@@ -1,5 +1,6 @@
-import { Head, Link } from "@inertiajs/react";
+import { Head, Link, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
+import { appName } from "@/Utils/appIdentity";
 import { BookOpen, FileText, Network, Settings, Shield, Users } from "lucide-react";
 
 const sections = [
@@ -51,6 +52,8 @@ const sections = [
 ];
 
 export default function AdminDocumentation() {
+    const { settings } = usePage().props;
+
     return (
         <>
             <Head title="Dokumentasi Admin" />
@@ -64,7 +67,7 @@ export default function AdminDocumentation() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Admin</h1>
                                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                                    Panduan operasional admin untuk mengelola user, master data, surat, notifikasi, log teknis, dan pengaturan aplikasi SADIKA.
+                                    Panduan operasional admin untuk mengelola user, master data, surat, notifikasi, log teknis, dan pengaturan aplikasi {appName(settings)}.
                                 </p>
                             </div>
                         </div>

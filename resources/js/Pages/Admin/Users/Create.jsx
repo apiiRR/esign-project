@@ -1,11 +1,12 @@
 import { Head, Link, useForm, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
 import { Building2, Save, Shield, UserRound } from "lucide-react";
+import { appName } from "@/Utils/appIdentity";
 
 const positions = ["Direktur", "General Manager", "Manager", "Pegawai"];
 
 export default function UsersCreate() {
-    const { roles, directorates, divisions, departments } = usePage().props;
+    const { roles, directorates, divisions, departments, settings } = usePage().props;
     const { data, setData, post, processing, errors } = useForm({
         username: "",
         name: "",
@@ -33,7 +34,7 @@ export default function UsersCreate() {
 
     return (
         <>
-            <Head title={`Tambah User - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Tambah User - ${appName(settings)}`} />
             <LayoutAdmin>
                 <div className="space-y-6">
                     <div>

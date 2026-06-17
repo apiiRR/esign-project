@@ -9,11 +9,12 @@ import { Save } from "lucide-react";
 
 // import component PageHeader
 import PageHeader from "@/Shared/PageHeader";
+import { appName } from "@/Utils/appIdentity";
 
 export default function PermissionsEdit() {
 
     // destruct permission dari props
-    const { permission } = usePage().props;
+    const { permission, settings } = usePage().props;
 
     // useForm untuk mengelola form data
     const { data, setData, put, processing, errors } = useForm({
@@ -30,7 +31,7 @@ export default function PermissionsEdit() {
 
     return (
         <>
-            <Head title={`Edit Permission - ${(import.meta.env.VITE_APP_NAME || "SADIKA")}`} />
+            <Head title={`Edit Permission - ${appName(settings)}`} />
             <LayoutAdmin>
 
                 {/* Header */}

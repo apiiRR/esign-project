@@ -1,9 +1,11 @@
 // import Link dari Inertia
-import { Link } from "@inertiajs/react";
+import { Link, usePage } from "@inertiajs/react";
 
 import ApplicationLogo from "@/Components/ApplicationLogo";
+import { appName, companyName } from "@/Utils/appIdentity";
 
 export default function Logo() {
+    const { settings } = usePage().props;
     
     return (
         <Link href="/admin/dashboard">
@@ -21,10 +23,10 @@ export default function Logo() {
                 
                 <div className="ml-3 min-w-0">
                     <h1 className="text-md uppercase font-bold text-gray-900">
-                        PT Berdikari
+                        {companyName(settings)}
                     </h1>
                     <p className="mt-0.5 max-w-[170px] break-words text-[11px] font-medium leading-tight text-gray-500">
-                        Surat dan Arsip Digital Berdikari
+                        {appName(settings)}
                     </p>
                 </div>
             </div>

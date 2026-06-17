@@ -218,6 +218,31 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec app ph
 docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler nginx
 ```
 
+## Preview PDF dan MIME Asset
+
+Preview PDF tanda tangan memakai PDF.js worker dari hasil build Vite, misalnya `/build/assets/pdf.worker.min-xxxx.mjs`. Browser modern menolak module worker jika server mengirim file `.mjs` sebagai `application/octet-stream`.
+
+Setelah deploy atau rebuild image, pastikan container `nginx` sudah memakai konfigurasi terbaru:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml build nginx
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d nginx
+```
+
+Verifikasi header worker PDF.js:
+
+```bash
+curl -I https://sadika.ptberdikari.co.id/build/assets/pdf.worker.min-xxxx.mjs
+```
+
+Header yang benar harus berisi:
+
+```text
+Content-Type: application/javascript
+```
+
+Jika console browser masih menampilkan asset lama seperti `app-CnDshirL.js` atau worker lama setelah deploy, lakukan purge cache Cloudflare dan hard refresh browser. Untuk PWA/service worker, tutup semua tab aplikasi lalu buka ulang, atau unregister service worker dari DevTools jika cache lama masih tertahan.
+
 ## Catatan Queue
 
 Production menjalankan service `queue` terus-menerus. Service ini memproses job background seperti email, OTP, dan proses lain yang nantinya masuk queue. Jika email tidak terkirim, cek:

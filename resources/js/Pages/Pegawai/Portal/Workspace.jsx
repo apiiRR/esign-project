@@ -21,8 +21,6 @@ import {
     Upload,
 } from "lucide-react";
 
-const MAX_PDF_SIZE = 10 * 1024 * 1024;
-
 function Header({ title, description, actionHref, actionText }) {
     return (
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -123,14 +121,22 @@ function letterTypeMeta(letterOrType) {
 
 function signatureStatusMeta(status) {
     const statuses = {
-        ready: { label: "Siap ditandatangani", tone: "amber" },
+        ready: { label: "Siap diproses", tone: "amber" },
         pending: { label: "Menunggu giliran", tone: "gray" },
-        in_progress: { label: "Proses tanda tangan", tone: "amber" },
+        in_progress: { label: "Proses approval", tone: "amber" },
         signed: { label: "Disetujui", tone: "green" },
         rejected: { label: "Ditolak", tone: "red" },
     };
 
     return statuses[status] || { label: status || "-", tone: "gray" };
+}
+
+function approvalTypeMeta(request) {
+    const type = request?.approval_type === "paraf" ? "paraf" : "signature";
+
+    return type === "paraf"
+        ? { label: "Paraf", action: "Setujui Paraf", ready: "Paraf", doneTitle: "Sudah Diparaf", doneMessage: "Paraf dokumen sudah disetujui di sistem.", waiting: "Menunggu giliran paraf." }
+        : { label: "Tanda Tangan", action: "Setujui dan Tempel QR", ready: "TTD", doneTitle: "Sudah Ditandatangani", doneMessage: "Tanda tangan QR sudah disetujui dan ditempel ke PDF signed.", waiting: "Menunggu giliran tanda tangan." };
 }
 
 function signatureActionLabel(status) {
@@ -140,6 +146,12 @@ function signatureActionLabel(status) {
         signed: "Lihat dokumen",
         rejected: "Lihat catatan",
     }[status] || "Lihat";
+}
+
+function approvalActionLabel(request) {
+    if (request?.status === "ready" && request?.approval_type === "paraf") return "Paraf";
+
+    return signatureActionLabel(request?.status);
 }
 
 function businessLetterType(letter) {
@@ -217,14 +229,18 @@ function Dashboard() {
                 <LetterList
                     letters={letters}
                     emptyText="Belum ada surat internal yang dapat ditampilkan."
+                    context="dashboard"
                 />
             </div>
         </>
     );
 }
 
-function LetterList({ letters, emptyText = "Tidak ada data surat." }) {
+function LetterList({ letters, emptyText = "Tidak ada data surat.", context = "default" }) {
     const rows = collection(letters);
+    const { auth } = usePage().props;
+    const isArchive = context === "archive";
+    const isDashboard = context === "dashboard";
 
     return (
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -237,7 +253,17 @@ function LetterList({ letters, emptyText = "Tidak ada data surat." }) {
             <div className="divide-y divide-gray-100">
                 {rows.length ? (
                     rows.map((letter) => {
-                        const unread = !letter.read_receipts?.length;
+                        const unread = letter.is_dashboard_item && letter.source === "disposisi"
+                            ? !letter.read_at
+                            : !letter.read_receipts?.length;
+                        const summaryOnly = Boolean(letter.summary_only);
+                        const isCreator = String(letter.created_by) === String(auth?.user?.id);
+                        const actionUrl = letter.action_url || `/pegawai/surat/${letter.letter_id || letter.id}`;
+                        const sourceMeta = {
+                            internal: { label: "Inbox Internal", tone: "blue" },
+                            tebusan: { label: "Tebusan", tone: "green" },
+                            disposisi: { label: "Disposisi", tone: "amber" },
+                        }[letter.source] || null;
                         return (
                             <div
                                 key={letter.id}
@@ -245,43 +271,62 @@ function LetterList({ letters, emptyText = "Tidak ada data surat." }) {
                             >
                                 <div className="min-w-0 md:col-span-6">
                                     <div className="flex items-center gap-2">
-                                        {unread ? (
+                                        {!isArchive && unread ? (
                                             <span className="h-2 w-2 rounded-full bg-red-600" />
-                                        ) : (
+                                        ) : !isArchive ? (
                                             <CheckCheck className="h-4 w-4 text-emerald-600" />
+                                        ) : null}
+                                        {summaryOnly ? (
+                                            <span className="truncate font-semibold text-gray-950">
+                                                {letterDisplayNumber(letter)}
+                                            </span>
+                                        ) : (
+                                            <Link
+                                                href={actionUrl}
+                                                className="truncate font-semibold text-gray-950 hover:text-emerald-700"
+                                            >
+                                                {letter.subject || letter.title || letterDisplayNumber(letter)}
+                                            </Link>
                                         )}
-                                        <Link
-                                            href={`/pegawai/surat/${letter.id}`}
-                                            className="truncate font-semibold text-gray-950 hover:text-emerald-700"
-                                        >
-                                            {letter.subject || letter.title}
-                                        </Link>
                                         <Pill tone={letterTypeMeta(letter).tone}>
                                             {letterTypeMeta(letter).label}
                                         </Pill>
                                     </div>
                                     <div className="mt-1 text-xs text-gray-500">
                                         {letterDisplayNumber(letter)} ·{" "}
-                                        {formatDate(letter.created_at)} ·{" "}
-                                        {letter.page_count || 1} halaman
+                                        {summaryOnly
+                                            ? "Akses ringkasan"
+                                            : isDashboard
+                                              ? formatDate(letter.created_at)
+                                              : `${formatDate(letter.created_at)} · ${letter.page_count || 1} halaman`}
                                     </div>
                                 </div>
                                 <div className="text-gray-700 md:col-span-2">
-                                    {letter.creator?.name || "-"}
+                                    {summaryOnly ? "-" : (letter.sender || letter.creator?.name || "-")}
                                 </div>
                                 <div className="md:col-span-2">
-                                    <Pill tone={unread ? "red" : "green"}>
-                                        {unread ? "Belum dibaca" : "Dibaca"}
-                                    </Pill>
+                                    {isDashboard && sourceMeta ? (
+                                        <Pill tone={sourceMeta.tone}>{sourceMeta.label}</Pill>
+                                    ) : isArchive && (isCreator || summaryOnly) ? (
+                                        <span className="text-xs text-gray-400">-</span>
+                                    ) : (
+                                        <Pill tone={unread ? "red" : "green"}>
+                                            {unread ? "Belum dibaca" : "Dibaca"}
+                                        </Pill>
+                                    )}
                                 </div>
                                 <div className="md:col-span-2 md:text-right">
-                                    <Link
-                                        href={`/pegawai/surat/${letter.id}`}
-                                        className="inline-flex rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-emerald-700"
-                                        title="Lihat detail"
-                                    >
-                                        <Eye className="h-4 w-4" />
-                                    </Link>
+                                    {summaryOnly ? (
+                                        <span className="text-xs text-gray-400">Tidak tersedia</span>
+                                    ) : (
+                                        <Link
+                                            href={actionUrl}
+                                            className="inline-flex rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-emerald-700"
+                                            title="Lihat detail"
+                                        >
+                                            <Eye className="h-4 w-4" />
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -351,7 +396,7 @@ function ApprovalPage() {
         <>
             <Header
                 title="Approval"
-                description="Permintaan tanda tangan QR yang ditujukan kepada Anda."
+                description="Permintaan paraf dan tanda tangan yang ditujukan kepada Anda."
             />
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                 <div className="hidden grid-cols-12 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-semibold uppercase text-gray-600 md:grid">
@@ -365,6 +410,7 @@ function ApprovalPage() {
                     {rows.length ? (
                         rows.map((request) => {
                             const status = signatureStatusMeta(request.status);
+                            const type = approvalTypeMeta(request);
                             return (
                                 <div key={request.id} className="grid gap-3 px-5 py-4 text-sm md:grid-cols-12 md:items-center">
                                     <div className="min-w-0 md:col-span-5">
@@ -379,22 +425,22 @@ function ApprovalPage() {
                                         {request.letter?.creator?.name || "-"}
                                     </div>
                                     <div className="text-gray-700 md:col-span-2">
-                                        TTD {request.signing_order}
+                                        {type.label} {request.signing_order}
                                     </div>
                                     <div className="md:col-span-2">
                                         <Pill tone={status.tone}>{status.label}</Pill>
                                     </div>
                                     <div className="md:col-span-1 md:text-right">
-                                        <Link href={`/pegawai/approval/${request.id}`} className="inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 hover:text-emerald-700" title={signatureActionLabel(request.status)}>
+                                        <Link href={`/pegawai/approval/${request.id}`} className="inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 hover:text-emerald-700" title={approvalActionLabel(request)}>
                                             <Eye className="mr-1.5 h-4 w-4" />
-                                            {signatureActionLabel(request.status)}
+                                            {approvalActionLabel(request)}
                                         </Link>
                                     </div>
                                 </div>
                             );
                         })
                     ) : (
-                        <EmptyState message="Tidak ada permintaan approval tanda tangan QR." />
+                        <EmptyState message="Tidak ada permintaan approval dokumen." />
                     )}
                 </div>
                 <Pagination meta={approvalRequests} />
@@ -415,6 +461,7 @@ function ApprovalDetailPage() {
     }
 
     const status = signatureStatusMeta(signatureRequest.status);
+    const type = approvalTypeMeta(signatureRequest);
     const canAct = signatureRequest.status === "ready" && hasReadLetter;
     const otpRequired = Boolean(settings?.signature_otp_enabled);
     const approveOtpReady = !otpRequired || approveForm.data.otp_code.trim();
@@ -447,7 +494,7 @@ function ApprovalDetailPage() {
         <>
             <Header
                 title="Detail Approval"
-                description={`${letterDisplayNumber(letter)} · TTD ${signatureRequest.signing_order}`}
+                description={`${letterDisplayNumber(letter)} · ${type.label} ${signatureRequest.signing_order}`}
             />
             <div className="grid gap-6 xl:grid-cols-12">
                 <div className="space-y-5 xl:col-span-7">
@@ -473,9 +520,10 @@ function ApprovalDetailPage() {
                                 ["Nomor Surat", letterDisplayNumber(letter)],
                                 ["Perihal", letter.subject || letter.title || "-"],
                                 ["Pembuat", letter.creator?.name || "-"],
-                                ["Signer", signatureRequest.signer?.name || "-"],
-                                ["Urutan", `TTD ${signatureRequest.signing_order}`],
-                                ["Halaman", signatureRequest.page_number],
+                                ["User Approval", signatureRequest.signer?.name || "-"],
+                                ["Jenis", type.label],
+                                ["Urutan", signatureRequest.signing_order],
+                                ...(signatureRequest.approval_type === "paraf" ? [] : [["Halaman", signatureRequest.page_number]]),
                                 ["Tanggal request", formatDate(signatureRequest.created_at)],
                                 ...(signatureRequest.signed_at ? [["Disetujui", formatDate(signatureRequest.signed_at)]] : []),
                                 ...(signatureRequest.rejected_at ? [["Ditolak", formatDate(signatureRequest.rejected_at)]] : []),
@@ -499,16 +547,16 @@ function ApprovalDetailPage() {
                     </Panel>
 
                     {signatureRequest.status === "signed" ? (
-                        <Panel title="Sudah Ditandatangani">
+                        <Panel title={type.doneTitle}>
                             <InfoGrid
                                 rows={[
-                                    ["Tanggal tanda tangan", formatDate(signatureRequest.signed_at)],
+                                    ["Tanggal persetujuan", formatDate(signatureRequest.signed_at)],
                                     ...(signatureRequest.note ? [["Catatan persetujuan", signatureRequest.note]] : []),
-                                    ["Status verifikasi", signatureRequest.verification_token ? "QR verifikasi tersedia" : "QR verifikasi belum tersedia"],
+                                    ...(signatureRequest.approval_type === "paraf" ? [] : [["Status verifikasi", signatureRequest.verification_token ? "QR verifikasi tersedia" : "QR verifikasi belum tersedia"]]),
                                 ]}
                             />
                             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                                Tanda tangan QR sudah disetujui dan ditempel ke PDF signed.
+                                {type.doneMessage}
                             </div>
                         </Panel>
                     ) : null}
@@ -516,7 +564,7 @@ function ApprovalDetailPage() {
                     {signatureRequest.status === "pending" ? (
                         <Panel title="Menunggu Giliran">
                             <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                                Request ini belum bisa ditandatangani karena masih menunggu signer sebelumnya menyetujui.
+                                Request ini belum bisa diproses karena masih menunggu approval sebelumnya menyetujui.
                             </div>
                         </Panel>
                     ) : null}
@@ -524,7 +572,7 @@ function ApprovalDetailPage() {
                     {signatureRequest.status === "rejected" ? (
                         <Panel title="Ditolak">
                             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                                Permintaan tanda tangan ini sudah ditolak.
+                                Permintaan approval ini sudah ditolak.
                             </div>
                             <InfoGrid
                                 rows={[
@@ -591,7 +639,7 @@ function ApprovalDetailPage() {
                             className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300"
                         >
                             <CheckCheck className="mr-2 h-4 w-4" />
-                            Setujui dan Tempel QR
+                            {type.action}
                         </button>
                         <div className="mt-4">
                             <label className="text-sm font-semibold text-gray-800">Catatan penolakan</label>
@@ -639,6 +687,7 @@ function SignatureApprovalPanel({ request }) {
     const approveForm = useForm({ note: "", otp_code: "" });
     const rejectForm = useForm({ note: "", otp_code: "" });
     const status = signatureStatusMeta(request?.status);
+    const type = approvalTypeMeta(request);
     const canAct = request?.status === "ready";
     const otpRequired = Boolean(settings?.signature_otp_enabled);
     const approveOtpReady = !otpRequired || approveForm.data.otp_code.trim();
@@ -665,15 +714,16 @@ function SignatureApprovalPanel({ request }) {
     };
 
     return (
-        <Panel title="Approval Tanda Tangan QR">
+        <Panel title="Approval Dokumen">
             <div className="mb-4">
                 <Pill tone={status.tone}>{status.label}</Pill>
             </div>
             <InfoGrid
                 rows={[
-                    ["Signer", request.signer?.name || "-"],
-                    ["Urutan", `TTD ${request.signing_order}`],
-                    ["Halaman", request.page_number],
+                    ["User Approval", request.signer?.name || "-"],
+                    ["Jenis", type.label],
+                    ["Urutan", request.signing_order],
+                    ...(request.approval_type === "paraf" ? [] : [["Halaman", request.page_number]]),
                     ...(request.signed_at ? [["Disetujui", formatDate(request.signed_at)]] : []),
                     ...(request.rejected_at ? [["Ditolak", formatDate(request.rejected_at)]] : []),
                     ...(request.note ? [["Catatan", request.note]] : []),
@@ -681,17 +731,17 @@ function SignatureApprovalPanel({ request }) {
             />
             {request.status === "pending" ? (
                 <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                    Menunggu giliran tanda tangan. Request ini akan aktif setelah signer sebelumnya menyetujui.
+                    {type.waiting} Request ini akan aktif setelah approval sebelumnya menyetujui.
                 </div>
             ) : null}
             {request.status === "signed" ? (
                 <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                    Tanda tangan QR sudah disetujui dan ditempel ke PDF signed.
+                    {type.doneMessage}
                 </div>
             ) : null}
             {request.status === "rejected" ? (
                 <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    Permintaan tanda tangan ini sudah ditolak.
+                    Permintaan approval ini sudah ditolak.
                 </div>
             ) : null}
             {approveForm.errors.signature || rejectForm.errors.signature ? (
@@ -751,7 +801,7 @@ function SignatureApprovalPanel({ request }) {
                         className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                         <CheckCheck className="mr-2 h-4 w-4" />
-                        Setujui dan Tempel QR
+                        {type.action}
                     </button>
                     <div>
                         <label className="text-sm font-semibold text-gray-800">Catatan penolakan</label>
@@ -1040,26 +1090,43 @@ function CreatePage() {
             return;
         }
 
-        if (file.size > MAX_PDF_SIZE) {
-            const message = "Ukuran File Scan PDF maksimal 10MB. Pilih file yang lebih kecil atau kompres PDF terlebih dahulu.";
-            setData("scan_file", null);
-            setPdfPreviewUrl("");
-            setClientErrors([message]);
-            window.alert(message);
-            return;
-        }
-
         setData("scan_file", file);
         setPdfPreviewUrl(URL.createObjectURL(file));
     }
 
     function normalizeSignatureRequests(requests) {
-        return requests
-            .map((request, index) => ({
+        const grouped = [
+            ...requests.filter((request) => request.approval_type === "paraf"),
+            ...requests.filter((request) => (request.approval_type || "signature") === "signature"),
+        ];
+        let signatureNumber = 0;
+
+        return grouped.map((request, index) => {
+            const isSignatureRequest = (request.approval_type || "signature") === "signature";
+            if (isSignatureRequest) signatureNumber += 1;
+
+            return {
                 ...request,
+                approval_type: request.approval_type || "signature",
                 signing_order: index + 1,
-            }))
-            .sort((first, second) => first.signing_order - second.signing_order);
+                signature_number: isSignatureRequest ? signatureNumber : null,
+            };
+        });
+    }
+
+    function addParafRequest() {
+        if (!isInternal) return;
+        const signer = (targetOptions.users || [])[0];
+
+        setData("signature_requests", normalizeSignatureRequests([
+            ...data.signature_requests,
+            {
+                local_id: `${Date.now()}-${data.signature_requests.length}`,
+                approval_type: "paraf",
+                signer_user_id: signer?.id || "",
+                signing_order: data.signature_requests.length + 1,
+            },
+        ]));
     }
 
     function addSignatureRequest(placement) {
@@ -1070,6 +1137,7 @@ function CreatePage() {
             ...data.signature_requests,
             {
                 local_id: `${Date.now()}-${data.signature_requests.length}`,
+                approval_type: "signature",
                 signer_user_id: signer?.id || "",
                 signing_order: data.signature_requests.length + 1,
                 page_number: placement.page_number,
@@ -1108,7 +1176,7 @@ function CreatePage() {
         if (isInternal) {
             const invalidSignature = data.signature_requests.find((request) => !request.signer_user_id);
             if (invalidSignature) {
-                const message = "Pilih signer untuk semua titik tanda tangan.";
+                const message = "Pilih user untuk semua paraf dan tanda tangan.";
                 setClientErrors([message]);
                 window.alert(message);
                 return;
@@ -1281,7 +1349,7 @@ function CreatePage() {
                                         className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
                                     />
                                     <div className="mt-2 text-xs text-gray-500">
-                                        Hanya file PDF, maksimal 10MB.
+                                        Hanya file PDF. Aplikasi tidak membatasi ukuran file.
                                     </div>
                                 </div>
                             </div>
@@ -1297,6 +1365,7 @@ function CreatePage() {
                         <SignatureRequestPanel
                             requests={data.signature_requests}
                             signerOptions={targetOptions.users || []}
+                            onAddParaf={addParafRequest}
                             onUpdate={updateSignatureRequest}
                             onRemove={removeSignatureRequest}
                             onMove={moveSignatureRequest}
@@ -1380,6 +1449,7 @@ function CreatePage() {
 function SignatureRequestPanel({
     requests,
     signerOptions,
+    onAddParaf,
     onUpdate,
     onRemove,
     onMove,
@@ -1392,30 +1462,40 @@ function SignatureRequestPanel({
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h2 className="text-sm font-semibold text-gray-950">Tanda Tangan QR</h2>
+                    <h2 className="text-sm font-semibold text-gray-950">Paraf dan Tanda Tangan</h2>
                     <p className="mt-1 text-xs leading-5 text-gray-500">
-                        Klik tombol tambah, lalu klik halaman PDF di kanan. Sistem akan mendeteksi halaman tanda tangan otomatis.
+                        Paraf diproses lebih dulu tanpa QR. Tanda tangan QR ditempatkan di PDF setelah semua paraf selesai.
                     </p>
                 </div>
             </div>
-            <button
-                type="button"
-                disabled={!pdfReady}
-                onClick={() => setPlacementActive(!placementActive)}
-                className={`mt-4 inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
-                    placementActive
-                        ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                        : "bg-emerald-700 text-white hover:bg-emerald-800"
-                }`}
-            >
-                {placementActive ? "Batal tambah titik" : "Tambah titik tanda tangan"}
-            </button>
+            <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                    type="button"
+                    onClick={onAddParaf}
+                    className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Tambah paraf
+                </button>
+                <button
+                    type="button"
+                    disabled={!pdfReady}
+                    onClick={() => setPlacementActive(!placementActive)}
+                    className={`inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                        placementActive
+                            ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                            : "bg-emerald-700 text-white hover:bg-emerald-800"
+                    }`}
+                >
+                    {placementActive ? "Batal tambah titik TTD" : "Tambah tanda tangan QR"}
+                </button>
+            </div>
             {!pdfReady ? (
-                <div className="mt-2 text-xs text-gray-500">Upload PDF dulu untuk mengaktifkan penempatan tanda tangan.</div>
+                <div className="mt-2 text-xs text-gray-500">Upload PDF dulu untuk mengaktifkan penempatan tanda tangan QR.</div>
             ) : placementActive ? (
-                <div className="mt-2 text-xs text-amber-700">Mode tambah aktif. Klik satu posisi di preview PDF. Setelah titik dibuat, mode akan mati agar PDF bisa discroll lagi.</div>
+                <div className="mt-2 text-xs text-amber-700">Mode tambah TTD aktif. Klik satu posisi di preview PDF. Setelah titik dibuat, mode akan mati agar PDF bisa discroll lagi.</div>
             ) : (
-                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal. Aktifkan tombol tambah titik hanya saat ingin menandai posisi tanda tangan.</div>
+                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal. Paraf tidak membutuhkan posisi PDF.</div>
             )}
 
             {errors.signature_requests ? (
@@ -1427,7 +1507,13 @@ function SignatureRequestPanel({
             <div className="mt-4 space-y-3">
                 {requests.length ? requests.map((request, index) => (
                     <div key={request.local_id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                        <div className="grid gap-3 md:grid-cols-[90px_1fr_110px_auto] md:items-end">
+                        <div className="grid gap-3 md:grid-cols-[110px_90px_1fr_110px_auto] md:items-end">
+                            <div className="text-xs font-semibold text-gray-600">
+                                Jenis
+                                <div className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium ${request.approval_type === "paraf" ? "border-blue-100 bg-blue-50 text-blue-700" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>
+                                    {request.approval_type === "paraf" ? "Paraf" : "Tanda Tangan"}
+                                </div>
+                            </div>
                             <label className="text-xs font-semibold text-gray-600">
                                 Urutan
                                 <select
@@ -1443,13 +1529,13 @@ function SignatureRequestPanel({
                                 </select>
                             </label>
                             <label className="text-xs font-semibold text-gray-600">
-                                Signer
+                                User Approval
                                 <select
                                     value={request.signer_user_id || ""}
                                     onChange={(event) => onUpdate(request.local_id, { signer_user_id: event.target.value })}
                                     className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                                 >
-                                    <option value="">Pilih signer</option>
+                                    <option value="">Pilih user</option>
                                     {signerOptions.map((user) => (
                                         <option key={user.id} value={user.id}>
                                             {user.name}{user.position ? ` - ${user.position}` : ""}
@@ -1460,7 +1546,7 @@ function SignatureRequestPanel({
                             <div className="text-xs font-semibold text-gray-600">
                                 Halaman
                                 <div className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800">
-                                    {request.page_number}
+                                    {request.approval_type === "paraf" ? "-" : request.page_number}
                                 </div>
                             </div>
                             <button
@@ -1472,7 +1558,9 @@ function SignatureRequestPanel({
                             </button>
                         </div>
                         <div className="mt-2 text-xs text-gray-500">
-                            Posisi: {(request.x * 100).toFixed(1)}%, {(request.y * 100).toFixed(1)}% · Ukuran: {(request.width * 100).toFixed(1)}% x {(request.height * 100).toFixed(1)}%
+                            {request.approval_type === "paraf"
+                                ? "Paraf hanya approval sistem dan tidak ditempel ke PDF."
+                                : `Posisi: ${(request.x * 100).toFixed(1)}%, ${(request.y * 100).toFixed(1)}% · Ukuran: ${(request.width * 100).toFixed(1)}% x ${(request.height * 100).toFixed(1)}%`}
                         </div>
                         {errors[`signature_requests.${index}.signer_user_id`] ? (
                             <div className="mt-2 text-xs text-red-600">{errors[`signature_requests.${index}.signer_user_id`]}</div>
@@ -1480,7 +1568,7 @@ function SignatureRequestPanel({
                     </div>
                 )) : (
                     <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                        Belum ada titik tanda tangan. Upload PDF lalu klik area preview untuk menambah titik.
+                        Belum ada paraf atau tanda tangan. Tambahkan paraf, atau upload PDF lalu klik area preview untuk menambah tanda tangan QR.
                     </div>
                 )}
             </div>
@@ -1497,6 +1585,12 @@ function DetailPage() {
         activeSignatureRequest,
         auth,
     } = usePage().props;
+    const rootDispositionForm = useForm({
+        target_type: dispositionTargetOptions?.targetTypes?.[0] || "directorate",
+        target_id: "",
+        note: "",
+    });
+
     if (!letter) {
         return (
             <EmptyState message="Surat tidak ditemukan atau Anda tidak memiliki akses." />
@@ -1524,6 +1618,27 @@ function DetailPage() {
     const canPublish =
         ["incoming_external", "outgoing", "archive"].includes(businessType) &&
         String(letter.created_by) === String(auth?.user?.id);
+    const canCreateRootDisposition =
+        isIncomingExternal &&
+        String(letter.created_by) === String(auth?.user?.id) &&
+        dispositionTypes.length > 0;
+    const currentVersionPath = letter.current_version?.signed_pdf_path
+        || letter.current_version?.source_pdf_path
+        || letter.signed_pdf_path
+        || letter.attachments?.[0]?.file_path;
+    const canUploadRevision =
+        businessType === "internal" &&
+        String(letter.created_by) === String(auth?.user?.id) &&
+        letter.signature_status === "rejected" &&
+        (letter.signature_requests || []).length > 0;
+
+    function submitRootDisposition(event) {
+        event.preventDefault();
+        rootDispositionForm.post(`/pegawai/surat/${letter.id}/disposisi`, {
+            preserveScroll: true,
+            onSuccess: () => rootDispositionForm.reset("target_id", "note"),
+        });
+    }
 
     return (
         <>
@@ -1567,7 +1682,7 @@ function DetailPage() {
                                     "Jumlah Halaman",
                                     `${letter.page_count || 1} Halaman`,
                                 ],
-                                ...(letter.signature_status ? [["Status Tanda Tangan", signatureStatusMeta(letter.signature_status).label]] : []),
+                                ...(letter.signature_status ? [["Status Approval Dokumen", signatureStatusMeta(letter.signature_status).label]] : []),
                                 ...(!isIncomingExternal && !isOutgoingLetter ? [["Status", letter.status]] : []),
                                 ...(letter.payload?.internal_origin_name
                                     ? [
@@ -1617,39 +1732,18 @@ function DetailPage() {
                     </Panel> : null}
 
                     {businessType === "internal" ? (
-                        <Panel title="Permintaan Tanda Tangan QR">
-                            {letter.signature_requests?.length ? (
-                                <div className="space-y-3">
-                                    {letter.signature_requests.map((request) => (
-                                        <div key={request.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
-                                            {(() => {
-                                                const status = signatureStatusMeta(request.status);
-                                                return (
-                                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                                <div>
-                                                    <div className="font-semibold text-gray-950">
-                                                        TTD {request.signing_order}: {request.signer?.name || "-"}
-                                                    </div>
-                                                    <div className="mt-1 text-xs text-gray-500">
-                                                        Halaman {request.page_number} · Posisi {(Number(request.x) * 100).toFixed(1)}%, {(Number(request.y) * 100).toFixed(1)}%
-                                                    </div>
-                                                </div>
-                                                <Pill tone={status.tone}>{status.label}</Pill>
-                                            </div>
-                                                );
-                                            })()}
-                                            <div className="mt-2 text-xs text-gray-500">
-                                                Dibuat {formatDate(request.created_at)}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-sm text-gray-500">
-                                    Belum ada permintaan tanda tangan QR.
-                                </div>
-                            )}
-                        </Panel>
+                        <ApprovalHistoryPanel letter={letter} />
+                    ) : null}
+
+                    {businessType === "internal" ? (
+                        <DocumentVersionHistory letter={letter} />
+                    ) : null}
+
+                    {canUploadRevision ? (
+                        <RevisionUploadPanel
+                            letter={letter}
+                            targetOptions={targetOptions}
+                        />
                     ) : null}
 
                     {activeSignatureRequest ? (
@@ -1668,6 +1762,15 @@ function DetailPage() {
                         <PublishExternalPanel
                             letter={letter}
                             targetOptions={targetOptions}
+                        />
+                    ) : null}
+
+                    {canCreateRootDisposition ? (
+                        <RootDispositionForm
+                            form={rootDispositionForm}
+                            targetOptions={dispositionTargetOptions}
+                            targetTypes={dispositionTypes}
+                            onSubmit={submitRootDisposition}
                         />
                     ) : null}
 
@@ -1721,10 +1824,10 @@ function DetailPage() {
 
                 <div className="space-y-5 xl:col-span-5">
                     <Panel title="Preview Surat">
-                        {letter.signed_pdf_path || letter.attachments?.[0] ? (
+                        {currentVersionPath ? (
                             <iframe
                                 title="Preview PDF"
-                                src={`/storage/${letter.signed_pdf_path || letter.attachments[0].file_path}`}
+                                src={`/storage/${currentVersionPath}`}
                                 className="h-[520px] md:h-[680px] w-full rounded-lg border border-gray-200 bg-gray-100"
                             />
                         ) : (
@@ -1766,6 +1869,308 @@ function DetailPage() {
                 </div>
             </div>
         </>
+    );
+}
+
+function ApprovalHistoryPanel({ letter }) {
+    const versions = letter.document_versions || [];
+    const fallbackRequests = letter.signature_requests || [];
+
+    if (!versions.length && !fallbackRequests.length) {
+        return (
+            <Panel title="Approval Dokumen">
+                <div className="text-sm text-gray-500">Belum ada approval dokumen.</div>
+            </Panel>
+        );
+    }
+
+    return (
+        <Panel title="Approval Dokumen">
+            <div className="space-y-4">
+                {versions.length ? versions.map((version) => (
+                    <ApprovalVersionBlock key={version.id} version={version} currentVersionId={letter.current_version_id} />
+                )) : (
+                    <ApprovalVersionBlock version={{ version_number: 1, signature_requests: fallbackRequests }} currentVersionId={letter.current_version_id} />
+                )}
+            </div>
+        </Panel>
+    );
+}
+
+function ApprovalVersionBlock({ version, currentVersionId }) {
+    const requests = version.signature_requests || [];
+
+    return (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-gray-950">
+                    Versi {version.version_number || 1}
+                </div>
+                {String(currentVersionId || "") === String(version.id || "") ? <Pill tone="blue">Aktif</Pill> : null}
+            </div>
+            {requests.length ? (
+                <div className="space-y-3">
+                    {requests.map((request) => {
+                        const status = signatureStatusMeta(request.status);
+                        const type = approvalTypeMeta(request);
+
+                        return (
+                            <div key={request.id} className="rounded-lg border border-gray-200 bg-white p-3 text-sm">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <div className="font-semibold text-gray-950">
+                                            {type.label} {request.signing_order}: {request.signer?.name || "-"}
+                                        </div>
+                                        {request.approval_type === "paraf" ? (
+                                            <div className="mt-1 text-xs text-gray-500">Approval sistem tanpa QR.</div>
+                                        ) : (
+                                            <div className="mt-1 text-xs text-gray-500">
+                                                Halaman {request.page_number} · Posisi {(Number(request.x) * 100).toFixed(1)}%, {(Number(request.y) * 100).toFixed(1)}%
+                                            </div>
+                                        )}
+                                    </div>
+                                    <Pill tone={status.tone}>{status.label}</Pill>
+                                </div>
+                                <div className="mt-2 text-xs text-gray-500">
+                                    {request.signed_at ? `Disetujui ${formatDate(request.signed_at)}` : request.rejected_at ? `Ditolak ${formatDate(request.rejected_at)}` : `Dibuat ${formatDate(request.created_at)}`}
+                                </div>
+                                {request.note ? (
+                                    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                                        Catatan: {request.note}
+                                    </div>
+                                ) : null}
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="text-sm text-gray-500">Tidak ada approval pada versi ini.</div>
+            )}
+        </div>
+    );
+}
+
+function DocumentVersionHistory({ letter }) {
+    const versions = letter.document_versions || [];
+
+    if (!versions.length) return null;
+
+    return (
+        <Panel title="Riwayat Versi Dokumen">
+            <div className="space-y-3">
+                {versions.map((version) => {
+                    const status = {
+                        active: { label: "Aktif", tone: "blue" },
+                        signed: { label: "Signed", tone: "green" },
+                        rejected: { label: "Ditolak", tone: "red" },
+                        superseded: { label: "Diganti", tone: "gray" },
+                    }[version.status] || { label: version.status || "-", tone: "gray" };
+
+                    return (
+                        <div key={version.id} className="rounded-lg border border-gray-200 px-4 py-3 text-sm">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div className="font-semibold text-gray-950">
+                                        Versi {version.version_number}
+                                    </div>
+                                    <div className="mt-1 text-xs text-gray-500">
+                                        Diupload oleh {version.uploader?.name || "-"} · {formatDate(version.created_at)}
+                                    </div>
+                                </div>
+                                <Pill tone={status.tone}>{status.label}</Pill>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                <a href={`/storage/${version.source_pdf_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-emerald-300">
+                                    <Download className="mr-2 h-3.5 w-3.5" />
+                                    PDF Sumber
+                                </a>
+                                {version.signed_pdf_path ? (
+                                    <a href={`/storage/${version.signed_pdf_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+                                        <Download className="mr-2 h-3.5 w-3.5" />
+                                        PDF Signed
+                                    </a>
+                                ) : null}
+                            </div>
+                            {version.rejection_note ? (
+                                <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+                                    Ditolak oleh {version.rejector?.name || "-"} pada {formatDate(version.rejected_at)}: {version.rejection_note}
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })}
+            </div>
+        </Panel>
+    );
+}
+
+function normalizeRevisionRequests(requests) {
+    const grouped = [
+        ...requests.filter((request) => request.approval_type === "paraf"),
+        ...requests.filter((request) => (request.approval_type || "signature") === "signature"),
+    ];
+    let signatureNumber = 0;
+
+    return grouped.map((request, index) => {
+        const isSignatureRequest = (request.approval_type || "signature") === "signature";
+        if (isSignatureRequest) signatureNumber += 1;
+
+        return {
+            ...request,
+            approval_type: request.approval_type || "signature",
+            signing_order: index + 1,
+            signature_number: isSignatureRequest ? signatureNumber : null,
+        };
+    });
+}
+
+function RevisionUploadPanel({ letter, targetOptions }) {
+    const form = useForm({
+        revision_flow: "reuse",
+        scan_file: null,
+        signature_requests: [],
+    });
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+    const [signaturePlacementActive, setSignaturePlacementActive] = useState(false);
+
+    useEffect(() => {
+        return () => {
+            if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+        };
+    }, [pdfPreviewUrl]);
+
+    const handleFile = (file) => {
+        if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+        if (!file) {
+            form.setData("scan_file", null);
+            setPdfPreviewUrl("");
+            return;
+        }
+        form.setData("scan_file", file);
+        setPdfPreviewUrl(URL.createObjectURL(file));
+    };
+
+    const addParaf = () => {
+        const signer = (targetOptions.users || [])[0];
+        form.setData("signature_requests", normalizeRevisionRequests([
+            ...form.data.signature_requests,
+            {
+                local_id: `${Date.now()}-${form.data.signature_requests.length}`,
+                approval_type: "paraf",
+                signer_user_id: signer?.id || "",
+            },
+        ]));
+    };
+
+    const addSignature = (placement) => {
+        if (!signaturePlacementActive) return;
+        const signer = (targetOptions.users || [])[0];
+        form.setData("signature_requests", normalizeRevisionRequests([
+            ...form.data.signature_requests,
+            {
+                local_id: `${Date.now()}-${form.data.signature_requests.length}`,
+                approval_type: "signature",
+                signer_user_id: signer?.id || "",
+                page_number: placement.page_number,
+                x: placement.x,
+                y: placement.y,
+                width: placement.width,
+                height: placement.height,
+            },
+        ]));
+        setSignaturePlacementActive(false);
+    };
+
+    const updateRequest = (localId, values) => {
+        form.setData("signature_requests", form.data.signature_requests.map((request) => (
+            request.local_id === localId ? { ...request, ...values } : request
+        )));
+    };
+
+    const removeRequest = (localId) => {
+        form.setData("signature_requests", normalizeRevisionRequests(form.data.signature_requests.filter((request) => request.local_id !== localId)));
+    };
+
+    const moveRequest = (localId, nextOrder) => {
+        const currentIndex = form.data.signature_requests.findIndex((request) => request.local_id === localId);
+        if (currentIndex < 0) return;
+
+        const reordered = [...form.data.signature_requests];
+        const [item] = reordered.splice(currentIndex, 1);
+        reordered.splice(Math.max(0, Number(nextOrder) - 1), 0, item);
+        form.setData("signature_requests", normalizeRevisionRequests(reordered));
+    };
+
+    const submit = (event) => {
+        event.preventDefault();
+        form.post(`/pegawai/surat/${letter.id}/revisi-pdf`, { preserveScroll: true });
+    };
+
+    return (
+        <Panel title="Upload PDF Revisi">
+            <form onSubmit={submit} className="space-y-4">
+                <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    Approval dokumen ditolak. Upload PDF terbaru untuk menjalankan ulang workflow approval.
+                </div>
+                <label className="block text-sm font-semibold text-gray-900">
+                    PDF revisi
+                    <input
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        onChange={(event) => handleFile(event.target.files?.[0])}
+                        className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                    {form.errors.scan_file ? <span className="mt-1 block text-xs text-red-600">{form.errors.scan_file}</span> : null}
+                </label>
+                <label className="block text-sm font-semibold text-gray-900">
+                    Alur approval
+                    <select
+                        value={form.data.revision_flow}
+                        onChange={(event) => form.setData({ ...form.data, revision_flow: event.target.value, signature_requests: [] })}
+                        className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                    >
+                        <option value="reuse">Gunakan alur approval sebelumnya</option>
+                        <option value="reset">Atur ulang paraf/tanda tangan</option>
+                    </select>
+                </label>
+
+                {form.data.revision_flow === "reset" ? (
+                    <div className="space-y-4 rounded-lg border border-gray-200 p-4">
+                        <SignatureRequestPanel
+                            requests={form.data.signature_requests}
+                            signerOptions={targetOptions.users || []}
+                            errors={form.errors}
+                            onAddParaf={addParaf}
+                            onUpdate={updateRequest}
+                            onRemove={removeRequest}
+                            onMove={moveRequest}
+                            placementActive={signaturePlacementActive}
+                            setPlacementActive={setSignaturePlacementActive}
+                            pdfReady={Boolean(pdfPreviewUrl)}
+                        />
+                        {pdfPreviewUrl ? (
+                            <PdfSignaturePlacement
+                                fileUrl={pdfPreviewUrl}
+                                requests={form.data.signature_requests}
+                                placementActive={signaturePlacementActive}
+                                onPlace={addSignature}
+                                onMove={(localId, placement) => updateRequest(localId, placement)}
+                            />
+                        ) : (
+                            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                                Upload PDF revisi terlebih dahulu untuk menempatkan TTD QR.
+                            </div>
+                        )}
+                    </div>
+                ) : null}
+
+                {form.errors.signature_requests ? <div className="text-xs text-red-600">{form.errors.signature_requests}</div> : null}
+                <button disabled={form.processing || !form.data.scan_file} className="inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Revisi
+                </button>
+            </form>
+        </Panel>
     );
 }
 
@@ -1977,6 +2382,67 @@ function DispositionThreadItem({ disposition, targetOptions, dispositionTargetOp
     );
 }
 
+function RootDispositionForm({ form, targetOptions, targetTypes, onSubmit }) {
+    const options = optionsByType(form.data.target_type, targetOptions);
+
+    return (
+        <Panel title="Input Disposisi">
+            <form onSubmit={onSubmit} className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                    <select
+                        value={form.data.target_type}
+                        onChange={(event) =>
+                            form.setData({
+                                ...form.data,
+                                target_type: event.target.value,
+                                target_id: "",
+                            })
+                        }
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                    >
+                        {targetTypes.map((type) => (
+                            <option key={type.id} value={type.id}>
+                                {type.name}
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        value={form.data.target_id}
+                        onChange={(event) => form.setData("target_id", event.target.value)}
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                    >
+                        <option value="">Pilih tujuan disposisi</option>
+                        {options.map((option) => (
+                            <option key={`${form.data.target_type}-${option.id}`} value={option.id}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <textarea
+                    rows={3}
+                    value={form.data.note}
+                    onChange={(event) => form.setData("note", event.target.value)}
+                    placeholder="Catatan disposisi"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                {form.errors.target_id || form.errors.target_type || form.errors.note ? (
+                    <div className="text-xs text-red-600">
+                        {form.errors.target_id || form.errors.target_type || form.errors.note}
+                    </div>
+                ) : null}
+                <button
+                    disabled={form.processing || !form.data.target_id}
+                    className="inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                    <Send className="mr-2 h-4 w-4" />
+                    Kirim Disposisi
+                </button>
+            </form>
+        </Panel>
+    );
+}
+
 function ForwardDispositionForm({ form, targetOptions, targetTypes, onSubmit }) {
     const options = optionsByType(form.data.target_type, targetOptions);
 
@@ -2063,18 +2529,53 @@ function fromUnitLabel(disposition) {
 
 function ArchivePage() {
     const { letters, filterOptions = {} } = usePage().props;
+    const currentCategory = new URLSearchParams(window.location.search).get("category") || "";
+    const categoryTabs = [
+        { id: "", name: "Semua" },
+        ...(filterOptions.letterCategories || []),
+    ];
+
+    function categoryHref(category) {
+        const params = new URLSearchParams(window.location.search);
+        if (category) {
+            params.set("category", category);
+        } else {
+            params.delete("category");
+        }
+
+        return `/pegawai/arsip${params.toString() ? `?${params.toString()}` : ""}`;
+    }
+
     return (
         <>
             <Header
                 title="Arsip Saya"
                 description="Surat yang Anda buat, terima, baca, atau menjadi target disposisi."
             />
+            <div className="mb-4 flex flex-wrap gap-2">
+                {categoryTabs.map((tab) => {
+                    const active = currentCategory === tab.id;
+                    return (
+                        <Link
+                            key={tab.id || "all"}
+                            href={categoryHref(tab.id)}
+                            preserveScroll
+                            className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                                active
+                                    ? "bg-emerald-700 text-white"
+                                    : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                        >
+                            {tab.name}
+                        </Link>
+                    );
+                })}
+            </div>
             <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                 <Search
-                    URL="/pegawai/arsip"
+                    URL={`/pegawai/arsip${currentCategory ? `?category=${currentCategory}` : ""}`}
                     filters={[
                         { key: "letter_type_ids", label: "Jenis Surat", options: filterOptions.letterTypes || [] },
-                        { key: "statuses", label: "Status Surat", options: filterOptions.letterStatuses || [] },
                         { key: "creator_ids", label: "Pembuat", options: filterOptions.users || [] },
                     ]}
                 />
@@ -2082,6 +2583,7 @@ function ArchivePage() {
             <LetterList
                 letters={letters}
                 emptyText="Arsip pribadi masih kosong."
+                context="archive"
             />
         </>
     );

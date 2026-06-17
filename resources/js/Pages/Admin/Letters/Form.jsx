@@ -5,8 +5,6 @@ import FormErrorSummary from "@/Shared/FormErrorSummary";
 import PdfSignaturePlacement from "@/Components/PdfSignaturePlacement";
 import { Archive, Plus, Send, Trash2, Upload } from "lucide-react";
 
-const MAX_PDF_SIZE = 10 * 1024 * 1024;
-
 export default function LetterForm() {
     const pageProps = usePage().props;
     const {
@@ -80,23 +78,43 @@ export default function LetterForm() {
             return;
         }
 
-        if (file.size > MAX_PDF_SIZE) {
-            const message = "Ukuran File Scan PDF maksimal 10MB. Pilih file yang lebih kecil atau kompres PDF terlebih dahulu.";
-            setData("scan_file", null);
-            setPdfPreviewUrl("");
-            setClientErrors([message]);
-            window.alert(message);
-            return;
-        }
-
         setData("scan_file", file);
         setPdfPreviewUrl(URL.createObjectURL(file));
     }
 
     function normalizeSignatureRequests(requests) {
-        return requests
-            .map((request, index) => ({ ...request, signing_order: index + 1 }))
-            .sort((first, second) => first.signing_order - second.signing_order);
+        const grouped = [
+            ...requests.filter((request) => request.approval_type === "paraf"),
+            ...requests.filter((request) => (request.approval_type || "signature") === "signature"),
+        ];
+        let signatureNumber = 0;
+
+        return grouped.map((request, index) => {
+            const isSignatureRequest = (request.approval_type || "signature") === "signature";
+            if (isSignatureRequest) signatureNumber += 1;
+
+            return {
+                ...request,
+                approval_type: request.approval_type || "signature",
+                signing_order: index + 1,
+                signature_number: isSignatureRequest ? signatureNumber : null,
+            };
+        });
+    }
+
+    function addParafRequest() {
+        if (!isInternal) return;
+        const signer = (targetOptions.users || [])[0];
+
+        setData("signature_requests", normalizeSignatureRequests([
+            ...data.signature_requests,
+            {
+                local_id: `${Date.now()}-${data.signature_requests.length}`,
+                approval_type: "paraf",
+                signer_user_id: signer?.id || "",
+                signing_order: data.signature_requests.length + 1,
+            },
+        ]));
     }
 
     function addSignatureRequest(placement) {
@@ -107,6 +125,7 @@ export default function LetterForm() {
             ...data.signature_requests,
             {
                 local_id: `${Date.now()}-${data.signature_requests.length}`,
+                approval_type: "signature",
                 signer_user_id: signer?.id || "",
                 signing_order: data.signature_requests.length + 1,
                 page_number: placement.page_number,
@@ -159,7 +178,7 @@ export default function LetterForm() {
         if (isInternal) {
             const invalidSignature = data.signature_requests.find((request) => !request.signer_user_id);
             if (invalidSignature) {
-                const message = "Pilih signer untuk semua titik tanda tangan.";
+                const message = "Pilih user untuk semua paraf dan tanda tangan.";
                 setClientErrors([message]);
                 window.alert(message);
                 return;
@@ -228,7 +247,7 @@ export default function LetterForm() {
                                         <Upload className="h-5 w-5 shrink-0 text-gray-500" />
                                         <div className="min-w-0 flex-1">
                                             <input type="file" accept="application/pdf,.pdf" onChange={(event) => handleFile(event.target.files?.[0] || null)} className="block w-full text-sm text-gray-700 file:mr-4 file:rounded-lg file:border-0 file:bg-emerald-700 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white" />
-                                            <div className="mt-2 text-xs text-gray-500">Hanya file PDF, maksimal 10MB.</div>
+                                            <div className="mt-2 text-xs text-gray-500">Hanya file PDF. Aplikasi tidak membatasi ukuran file.</div>
                                         </div>
                                     </div>
                                 </div>
@@ -239,6 +258,7 @@ export default function LetterForm() {
                                 <SignatureRequestPanel
                                     requests={data.signature_requests}
                                     signerOptions={targetOptions.users || []}
+                                    onAddParaf={addParafRequest}
                                     onUpdate={updateSignatureRequest}
                                     onRemove={removeSignatureRequest}
                                     onMove={moveSignatureRequest}
@@ -326,35 +346,45 @@ function TargetPicker({ title, draft, setDraft, targets, field, targetOptions, o
     );
 }
 
-function SignatureRequestPanel({ requests, signerOptions, onUpdate, onRemove, onMove, placementActive, setPlacementActive, pdfReady, errors }) {
+function SignatureRequestPanel({ requests, signerOptions, onAddParaf, onUpdate, onRemove, onMove, placementActive, setPlacementActive, pdfReady, errors }) {
     return (
         <Card>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h2 className="text-sm font-semibold text-gray-950">Tanda Tangan QR</h2>
+                    <h2 className="text-sm font-semibold text-gray-950">Paraf dan Tanda Tangan</h2>
                     <p className="mt-1 text-xs leading-5 text-gray-500">
-                        Klik tombol tambah, lalu klik halaman PDF di kanan. Sistem akan mendeteksi halaman tanda tangan otomatis.
+                        Paraf diproses lebih dulu tanpa QR. Tanda tangan QR ditempatkan di PDF setelah semua paraf selesai.
                     </p>
                 </div>
             </div>
-            <button
-                type="button"
-                disabled={!pdfReady}
-                onClick={() => setPlacementActive(!placementActive)}
-                className={`mt-4 inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
-                    placementActive
-                        ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
-                        : "bg-emerald-700 text-white hover:bg-emerald-800"
-                }`}
-            >
-                {placementActive ? "Batal tambah titik" : "Tambah titik tanda tangan"}
-            </button>
+            <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                    type="button"
+                    onClick={onAddParaf}
+                    className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Tambah paraf
+                </button>
+                <button
+                    type="button"
+                    disabled={!pdfReady}
+                    onClick={() => setPlacementActive(!placementActive)}
+                    className={`inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                        placementActive
+                            ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                            : "bg-emerald-700 text-white hover:bg-emerald-800"
+                    }`}
+                >
+                    {placementActive ? "Batal tambah titik TTD" : "Tambah tanda tangan QR"}
+                </button>
+            </div>
             {!pdfReady ? (
-                <div className="mt-2 text-xs text-gray-500">Upload PDF dulu untuk mengaktifkan penempatan tanda tangan.</div>
+                <div className="mt-2 text-xs text-gray-500">Upload PDF dulu untuk mengaktifkan penempatan tanda tangan QR.</div>
             ) : placementActive ? (
-                <div className="mt-2 text-xs text-amber-700">Mode tambah aktif. Klik satu posisi di preview PDF. Setelah titik dibuat, mode akan mati agar PDF bisa discroll lagi.</div>
+                <div className="mt-2 text-xs text-amber-700">Mode tambah TTD aktif. Klik satu posisi di preview PDF. Setelah titik dibuat, mode akan mati agar PDF bisa discroll lagi.</div>
             ) : (
-                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal. Aktifkan tombol tambah titik hanya saat ingin menandai posisi tanda tangan.</div>
+                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal. Paraf tidak membutuhkan posisi PDF.</div>
             )}
 
             {errors.signature_requests ? <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{errors.signature_requests}</div> : null}
@@ -362,7 +392,13 @@ function SignatureRequestPanel({ requests, signerOptions, onUpdate, onRemove, on
             <div className="mt-4 space-y-3">
                 {requests.length ? requests.map((request, index) => (
                     <div key={request.local_id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                        <div className="grid gap-3 md:grid-cols-[90px_1fr_110px_auto] md:items-end">
+                        <div className="grid gap-3 md:grid-cols-[110px_90px_1fr_110px_auto] md:items-end">
+                            <div className="text-xs font-semibold text-gray-600">
+                                Jenis
+                                <div className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium ${request.approval_type === "paraf" ? "border-blue-100 bg-blue-50 text-blue-700" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>
+                                    {request.approval_type === "paraf" ? "Paraf" : "Tanda Tangan"}
+                                </div>
+                            </div>
                             <label className="text-xs font-semibold text-gray-600">
                                 Urutan
                                 <select value={request.signing_order} onChange={(event) => onMove(request.local_id, event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
@@ -370,28 +406,30 @@ function SignatureRequestPanel({ requests, signerOptions, onUpdate, onRemove, on
                                 </select>
                             </label>
                             <label className="text-xs font-semibold text-gray-600">
-                                Signer
+                                User Approval
                                 <select value={request.signer_user_id || ""} onChange={(event) => onUpdate(request.local_id, { signer_user_id: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
-                                    <option value="">Pilih signer</option>
+                                    <option value="">Pilih user</option>
                                     {signerOptions.map((user) => <option key={user.id} value={user.id}>{user.name}{user.position ? ` - ${user.position}` : ""}</option>)}
                                 </select>
                             </label>
                             <div className="text-xs font-semibold text-gray-600">
                                 Halaman
                                 <div className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800">
-                                    {request.page_number}
+                                    {request.approval_type === "paraf" ? "-" : request.page_number}
                                 </div>
                             </div>
                             <button type="button" onClick={() => onRemove(request.local_id)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Hapus</button>
                         </div>
                         <div className="mt-2 text-xs text-gray-500">
-                            Posisi: {(request.x * 100).toFixed(1)}%, {(request.y * 100).toFixed(1)}% · Ukuran: {(request.width * 100).toFixed(1)}% x {(request.height * 100).toFixed(1)}%
+                            {request.approval_type === "paraf"
+                                ? "Paraf hanya approval sistem dan tidak ditempel ke PDF."
+                                : `Posisi: ${(request.x * 100).toFixed(1)}%, ${(request.y * 100).toFixed(1)}% · Ukuran: ${(request.width * 100).toFixed(1)}% x ${(request.height * 100).toFixed(1)}%`}
                         </div>
                         {errors[`signature_requests.${index}.signer_user_id`] ? <div className="mt-2 text-xs text-red-600">{errors[`signature_requests.${index}.signer_user_id`]}</div> : null}
                     </div>
                 )) : (
                     <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                        Belum ada titik tanda tangan. Upload PDF lalu klik area preview untuk menambah titik.
+                        Belum ada paraf atau tanda tangan. Tambahkan paraf, atau upload PDF lalu klik area preview untuk menambah tanda tangan QR.
                     </div>
                 )}
             </div>

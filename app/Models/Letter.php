@@ -25,6 +25,7 @@ class Letter extends Model
         'page_count',
         'signed_pdf_path',
         'signature_status',
+        'current_version_id',
         'status',
         'payload',
         'meta',
@@ -58,6 +59,16 @@ class Letter extends Model
     public function attachments()
     {
         return $this->hasMany(LetterAttachment::class);
+    }
+
+    public function documentVersions()
+    {
+        return $this->hasMany(LetterDocumentVersion::class)->orderByDesc('version_number');
+    }
+
+    public function currentVersion()
+    {
+        return $this->belongsTo(LetterDocumentVersion::class, 'current_version_id');
     }
 
     public function dispositions()

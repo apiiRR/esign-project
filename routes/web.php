@@ -69,6 +69,8 @@ Route::prefix('admin')->name('admin.')->group(function() {
             ->name('surat.store');
         Route::delete('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'destroyDraft'])
             ->name('surat.destroy-draft');
+        Route::post('/surat/{letter}/revisi-pdf', [App\Http\Controllers\Admin\LetterController::class, 'reviseInternalPdf'])
+            ->name('surat.revisi-pdf');
         Route::get('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'show'])
             ->name('surat.show');
         Route::put('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'update'])
@@ -232,6 +234,9 @@ Route::prefix('pegawai')->name('pegawai.')->middleware('auth')->group(function()
 
     Route::post('/surat/{letter}/disposisi', [App\Http\Controllers\Pegawai\PortalController::class, 'storeDisposition'])
         ->name('surat.dispositions.store');
+
+    Route::post('/surat/{letter}/revisi-pdf', [App\Http\Controllers\Pegawai\PortalController::class, 'reviseInternalPdf'])
+        ->name('surat.revisi-pdf');
 
     Route::post('/disposisi/{disposition}/balas', [App\Http\Controllers\Pegawai\PortalController::class, 'replyDisposition'])
         ->name('dispositions.reply');

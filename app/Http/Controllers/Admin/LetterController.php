@@ -103,7 +103,7 @@ class LetterController extends Controller
                 'letter_number' => ($type === 'incoming_external' && ! $isArchive ? 'required' : ($requirements->required($context, 'letter_number') ? 'required' : 'nullable')) . '|string|max:255|unique:letters,letter_number',
                 'subject' => 'required|string|max:255',
                 'title' => 'nullable|string|max:255',
-                'scan_file' => 'bail|' . (($requirements->required($context, 'scan_file') ? 'required' : 'nullable') . '|file|mimes:pdf|max:10240'),
+                'scan_file' => 'bail|' . (($requirements->required($context, 'scan_file') ? 'required' : 'nullable') . '|file|mimes:pdf'),
                 'targets' => $isInternal ? 'required|array|min:1' : 'nullable|array',
                 'targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
                 'targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
@@ -117,14 +117,16 @@ class LetterController extends Controller
                 'payload.external_recipient' => $isOutgoing ? 'required|string|max:255' : 'nullable|string|max:255',
                 'payload.notes' => in_array($type, ['incoming_external'], true) ? 'nullable|string' : 'nullable',
                 'signature_requests' => $isInternal ? 'nullable|array' : 'prohibited',
+                'signature_requests.*.approval_type' => $isInternal ? 'required|in:paraf,signature' : 'prohibited',
                 'signature_requests.*.signer_user_id' => $isInternal ? 'required|exists:users,id,status,active,role,pegawai' : 'prohibited',
                 'signature_requests.*.signing_order' => $isInternal ? 'required|integer|min:1|distinct' : 'prohibited',
-                'signature_requests.*.page_number' => $isInternal ? 'required|integer|min:1' : 'prohibited',
-                'signature_requests.*.x' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
-                'signature_requests.*.y' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
-                'signature_requests.*.width' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
-                'signature_requests.*.height' => $isInternal ? 'required|numeric|between:0,1' : 'prohibited',
+                'signature_requests.*.page_number' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|integer|min:1' : 'prohibited',
+                'signature_requests.*.x' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
+                'signature_requests.*.y' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
+                'signature_requests.*.width' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
+                'signature_requests.*.height' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
             ], $this->uploadValidationMessages());
+            $this->validateApprovalSequence($validated['signature_requests'] ?? []);
         } catch (ValidationException $exception) {
             $this->logUploadValidationFailure($request, $exception);
             throw $exception;
@@ -172,21 +174,23 @@ class LetterController extends Controller
                     $letter->signatureRequests()->create([
                         'requested_by' => $user->id,
                         'signer_user_id' => (int) $signatureRequest['signer_user_id'],
+                        'approval_type' => $signatureRequest['approval_type'] ?? 'signature',
                         'signing_order' => (int) $signatureRequest['signing_order'],
-                        'page_number' => (int) $signatureRequest['page_number'],
-                        'x' => (float) $signatureRequest['x'],
-                        'y' => (float) $signatureRequest['y'],
-                        'width' => (float) $signatureRequest['width'],
-                        'height' => (float) $signatureRequest['height'],
+                        'page_number' => (int) ($signatureRequest['page_number'] ?? 1),
+                        'x' => (float) ($signatureRequest['x'] ?? 0),
+                        'y' => (float) ($signatureRequest['y'] ?? 0),
+                        'width' => (float) ($signatureRequest['width'] ?? 0.18),
+                        'height' => (float) ($signatureRequest['height'] ?? 0.08),
                         'status' => 'pending',
                     ]);
                 }
             }
 
+            $attachment = null;
             if ($request->hasFile('scan_file')) {
                 $file = $request->file('scan_file');
                 $path = $file->store("letters/{$letter->reference}", 'public');
-                LetterAttachment::create([
+                $attachment = LetterAttachment::create([
                     'letter_id' => $letter->id,
                     'file_name' => $file->getClientOriginalName(),
                     'file_path' => $path,
@@ -196,17 +200,30 @@ class LetterController extends Controller
             }
 
             if ($isInternal && $letter->signatureRequests()->exists()) {
-                app(LetterSignatureService::class)->initializeRequests($letter);
+                $signatureService = app(LetterSignatureService::class);
+                if ($attachment) {
+                    $signatureService->createInitialVersion($letter, $attachment, $user);
+                }
+                $signatureService->initializeRequests($letter->fresh(['attachments', 'currentVersion']));
             }
 
             if (($isInternal || $isOutgoing) && $letter->status === 'sent' && ! ($isInternal && $letter->signatureRequests()->exists())) {
-                $notificationUserIds = $this->resolveTargetUsers(collect($validated['targets'] ?? [])->merge($validated['cc_targets'] ?? []))
+                $recipientUserIds = $this->resolveTargetUsers(collect($validated['targets'] ?? []))
                     ->reject(fn ($id) => (int) $id === (int) $user->id)
                     ->unique()
                     ->values();
 
-                foreach ($notificationUserIds as $userId) {
+                foreach ($recipientUserIds as $userId) {
                     app(NotificationDeliveryService::class)->letter($userId, $letter, 'Surat internal baru', $letter->subject);
+                }
+
+                $ccUserIds = $this->resolveTargetUsers(collect($validated['cc_targets'] ?? []))
+                    ->reject(fn ($id) => (int) $id === (int) $user->id)
+                    ->unique()
+                    ->values();
+
+                foreach ($ccUserIds as $userId) {
+                    app(NotificationDeliveryService::class)->letterCc($userId, $letter, 'Tembusan surat baru', $letter->subject);
                 }
             }
 
@@ -229,6 +246,11 @@ class LetterController extends Controller
             'dispositions.fromDepartment',
             'signatureRequests.signer:id,name,username,position',
             'signatureRequests.requester:id,name,username',
+            'signatureRequests.documentVersion:id,version_number,status',
+            'documentVersions.uploader:id,name,username',
+            'documentVersions.rejector:id,name,username',
+            'documentVersions.signatureRequests.signer:id,name,username,position',
+            'currentVersion',
             'readReceipts' => fn ($query) => $query->where('user_id', '!=', $letter->created_by),
             'readReceipts.user:id,name,username,position',
         ]);
@@ -250,6 +272,58 @@ class LetterController extends Controller
         $letter->update($validated);
 
         return back()->with('success', 'Status surat berhasil diperbarui.');
+    }
+
+    public function reviseInternalPdf(Request $request, Letter $letter, LetterSignatureService $signatureService)
+    {
+        $flow = $request->input('revision_flow', 'reuse');
+        $reset = $flow === 'reset';
+
+        try {
+            $validated = $request->validate([
+                'revision_flow' => 'required|in:reuse,reset',
+                'scan_file' => 'bail|required|file|mimes:pdf',
+                'signature_requests' => $reset ? 'required|array|min:1' : 'nullable|array',
+                'signature_requests.*.approval_type' => $reset ? 'required|in:paraf,signature' : 'nullable',
+                'signature_requests.*.signer_user_id' => $reset ? 'required|exists:users,id,status,active,role,pegawai' : 'nullable',
+                'signature_requests.*.signing_order' => $reset ? 'required|integer|min:1|distinct' : 'nullable',
+                'signature_requests.*.page_number' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|integer|min:1' : 'nullable',
+                'signature_requests.*.x' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
+                'signature_requests.*.y' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
+                'signature_requests.*.width' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
+                'signature_requests.*.height' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
+            ], $this->uploadValidationMessages());
+
+            if ($reset) {
+                $this->validateApprovalSequence($validated['signature_requests'] ?? []);
+            }
+        } catch (ValidationException $exception) {
+            $this->logUploadValidationFailure($request, $exception);
+            throw $exception;
+        }
+
+        $version = DB::transaction(function () use ($request, $letter, $signatureService, $validated, $flow) {
+            $file = $request->file('scan_file');
+            $path = $file->store("letters/{$letter->reference}/revisi", 'public');
+
+            $attachment = LetterAttachment::query()->create([
+                'letter_id' => $letter->id,
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $path,
+                'mime_type' => $file->getMimeType(),
+                'size' => $file->getSize(),
+            ]);
+
+            return $signatureService->createRevision(
+                $letter,
+                $attachment,
+                $request->user(),
+                $flow,
+                $validated['signature_requests'] ?? []
+            );
+        });
+
+        return back()->with('success', 'PDF revisi versi ' . $version->version_number . ' berhasil diunggah dan workflow approval dimulai ulang.');
     }
 
     public function destroyDraft(Request $request, Letter $letter)
@@ -336,12 +410,40 @@ class LetterController extends Controller
     private function uploadValidationMessages(): array
     {
         return [
-            'scan_file.uploaded' => 'File gagal diunggah. Pastikan file PDF dan ukuran tidak melebihi batas upload server.',
+            'scan_file.uploaded' => 'File gagal diunggah. Pastikan file PDF valid dan batas upload server mengizinkan ukuran file tersebut.',
             'scan_file.required_if' => 'File Scan PDF wajib diunggah.',
             'scan_file.file' => 'File Scan PDF tidak valid.',
             'scan_file.mimes' => 'File Scan harus berupa PDF.',
-            'scan_file.max' => 'Ukuran File Scan PDF maksimal 10MB.',
         ];
+    }
+
+    private function validateApprovalSequence(array $requests): void
+    {
+        $sorted = collect($requests)->sortBy('signing_order')->values();
+        $signatureStarted = false;
+
+        foreach ($sorted as $request) {
+            $type = $request['approval_type'] ?? 'signature';
+
+            if ($type === 'signature') {
+                foreach (['page_number', 'x', 'y', 'width', 'height'] as $field) {
+                    if (! array_key_exists($field, $request) || $request[$field] === null || $request[$field] === '') {
+                        throw ValidationException::withMessages([
+                            'signature_requests' => 'Tanda tangan wajib memiliki posisi di PDF.',
+                        ]);
+                    }
+                }
+
+                $signatureStarted = true;
+                continue;
+            }
+
+            if ($signatureStarted && $type === 'paraf') {
+                throw ValidationException::withMessages([
+                    'signature_requests' => 'Urutan paraf harus berada sebelum tanda tangan.',
+                ]);
+            }
+        }
     }
 
     private function logUploadValidationFailure(Request $request, ValidationException $exception): void

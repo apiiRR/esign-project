@@ -28,11 +28,11 @@ class SignatureOtpService
         $this->assertRequester($signatureRequest, $user);
 
         if (! $this->enabled()) {
-            throw ValidationException::withMessages(['otp' => 'OTP tanda tangan sedang tidak aktif.']);
+            throw ValidationException::withMessages(['otp' => 'OTP approval dokumen sedang tidak aktif.']);
         }
 
         if ($signatureRequest->status !== 'ready') {
-            throw ValidationException::withMessages(['otp' => 'OTP hanya bisa dikirim untuk permintaan tanda tangan yang aktif.']);
+            throw ValidationException::withMessages(['otp' => 'OTP hanya bisa dikirim untuk permintaan approval yang aktif.']);
         }
 
         $latest = LetterSignatureOtp::query()
@@ -65,10 +65,12 @@ class SignatureOtpService
         $letter = $signatureRequest->letter;
         $number = $letter ? ($letter->letter_number ?: $letter->reference) : '-';
 
+        $approvalLabel = $signatureRequest->approval_type === 'paraf' ? 'paraf dokumen' : 'tanda tangan dokumen';
+
         $this->mailSettings->sendRaw(
             $user,
-            'Kode OTP tanda tangan dokumen',
-            "Kode OTP Anda: {$code}\n\nKode ini berlaku " . self::EXPIRES_MINUTES . " menit untuk approve atau reject tanda tangan dokumen {$number}.",
+            'Kode OTP approval dokumen',
+            "Kode OTP Anda: {$code}\n\nKode ini berlaku " . self::EXPIRES_MINUTES . " menit untuk approve atau reject {$approvalLabel} {$number}.",
             true
         );
     }

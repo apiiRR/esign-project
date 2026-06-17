@@ -79,7 +79,11 @@ class MailSettingsService
     public function applyConfig(Setting $setting): void
     {
         $mailer = $setting->mail_mailer ?: 'smtp';
-        $scheme = $setting->mail_encryption ?: null;
+        $scheme = match ($setting->mail_encryption) {
+            'ssl' => 'smtps',
+            'tls', 'none', null, '' => 'smtp',
+            default => 'smtp',
+        };
 
         config([
             'mail.default' => $mailer,
@@ -87,7 +91,7 @@ class MailSettingsService
             'mail.mailers.smtp.port' => $setting->mail_port,
             'mail.mailers.smtp.username' => $setting->mail_username,
             'mail.mailers.smtp.password' => $setting->mail_password,
-            'mail.mailers.smtp.scheme' => $scheme === 'none' ? null : $scheme,
+            'mail.mailers.smtp.scheme' => $scheme,
             'mail.from.address' => $setting->mail_from_address,
             'mail.from.name' => $setting->mail_from_name ?: $setting->app_name,
         ]);

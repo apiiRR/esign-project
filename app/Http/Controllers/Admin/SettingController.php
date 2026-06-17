@@ -37,9 +37,11 @@ class SettingController extends Controller implements HasMiddleware
     public function index(): Response
     {
         $setting = $this->setting();
+        $settingData = $setting->toArray();
+        $settingData['mail_templates'] = $setting->mailTemplatesWithDefaults();
 
         return Inertia::render('Admin/Settings/Index', [
-            'setting' => $setting->toArray() + [
+            'setting' => $settingData + [
                 'mail_password_set' => filled($setting->mail_password),
             ],
             'fieldRequirementDefinitions' => LetterFieldRequirementService::DEFINITIONS,
@@ -77,6 +79,9 @@ class SettingController extends Controller implements HasMiddleware
             'mail_encryption' => 'nullable|in:tls,ssl,none',
             'mail_from_address' => 'nullable|email|max:255',
             'mail_from_name' => 'nullable|string|max:255',
+            'mail_templates' => 'nullable|array',
+            'mail_templates.*.subject' => 'nullable|string|max:255',
+            'mail_templates.*.body' => 'nullable|string|max:5000',
         ]);
 
         $data = $request->only([
@@ -90,6 +95,7 @@ class SettingController extends Controller implements HasMiddleware
             'mail_encryption',
             'mail_from_address',
             'mail_from_name',
+            'mail_templates',
         ]);
         $data['mail_notifications_enabled'] = $request->boolean('mail_notifications_enabled');
         $data['mail_letter_notifications_enabled'] = $request->boolean('mail_letter_notifications_enabled');
@@ -149,6 +155,7 @@ class SettingController extends Controller implements HasMiddleware
             'company_name' => 'PT Berdikari',
             'company_code' => 'BDRK',
             'letter_field_requirements' => app(LetterFieldRequirementService::class)->defaults(),
+            'mail_templates' => Setting::defaultMailTemplates(),
         ]);
     }
 }

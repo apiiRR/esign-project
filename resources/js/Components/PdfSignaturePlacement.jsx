@@ -17,6 +17,7 @@ export default function PdfSignaturePlacement({
     onUpdate,
     onPlacementComplete,
 }) {
+    const signatureRequests = requests.filter((request) => (request.approval_type || "signature") === "signature");
     const [pdfDocument, setPdfDocument] = useState(null);
     const [pageNumbers, setPageNumbers] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -102,7 +103,7 @@ export default function PdfSignaturePlacement({
                         key={pageNumber}
                         pdfDocument={pdfDocument}
                         pageNumber={pageNumber}
-                        requests={requests.filter((request) => Number(request.page_number) === pageNumber)}
+                        requests={signatureRequests.filter((request) => Number(request.page_number) === pageNumber)}
                         placementActive={placementActive}
                         onPageClick={addAtPosition}
                         onUpdate={onUpdate}
@@ -194,7 +195,7 @@ function PdfPage({ pdfDocument, pageNumber, requests, placementActive, onPageCli
                                 height: `${request.height * 100}%`,
                             }}
                         >
-                            TTD {request.signing_order}
+                            TTD {request.signature_number || request.signing_order}
                         </button>
                     ))}
                 </div>

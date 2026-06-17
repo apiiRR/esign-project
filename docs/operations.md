@@ -103,6 +103,105 @@ memory_limit = 256M
 
 Restart server PHP setelah mengubah `php.ini`.
 
+## Mengaktifkan SMTP Email Notifikasi
+
+Email notifikasi dan OTP tanda tangan diatur dari halaman:
+
+```text
+Admin > Settings > Email Notifikasi dan OTP
+```
+
+Field SMTP yang perlu diisi:
+
+- `Aktifkan email`: switch utama untuk mengaktifkan semua pengiriman email.
+- `Email surat masuk`: mengirim email untuk surat tujuan, tembusan, publish, dan disposisi.
+- `Email approval TTE`: mengirim email untuk tugas paraf/tanda tangan.
+- `Wajib OTP approve/reject`: signer wajib memasukkan OTP dari email saat approve atau reject.
+- `Mailer`: biasanya `smtp`.
+- `SMTP Host`: alamat server SMTP.
+- `SMTP Port`: port SMTP.
+- `Username SMTP`: username akun email.
+- `Password SMTP`: password SMTP atau app password.
+- `Encryption`: `TLS`, `SSL`, atau `None`.
+- `From Address`: alamat pengirim email aplikasi.
+- `From Name`: nama pengirim yang tampil di email.
+
+Urutan aktivasi SMTP:
+
+1. Pastikan setiap user penerima email punya alamat email yang valid.
+2. Isi konfigurasi SMTP di Admin Settings.
+3. Aktifkan switch `Aktifkan email`.
+4. Aktifkan jenis email yang diperlukan, misalnya `Email surat masuk` dan `Email approval TTE`.
+5. Jika OTP diperlukan untuk paraf/tanda tangan, aktifkan `Wajib OTP approve/reject`.
+6. Klik `Kirim Test Email` ke alamat email Anda sendiri.
+7. Jika test email berhasil, simpan setting.
+8. Coba trigger notifikasi asli, misalnya disposisi atau approval TTE.
+
+### Contoh SMTP Gmail
+
+Untuk Gmail, gunakan App Password, bukan password login Gmail biasa.
+
+Konfigurasi:
+
+```text
+Mailer: smtp
+SMTP Host: smtp.gmail.com
+SMTP Port: 587
+Username SMTP: namaakun@gmail.com
+Password SMTP: app password 16 karakter dari Google
+Encryption: tls
+From Address: namaakun@gmail.com
+From Name: SADIKA
+```
+
+Pada backend Laravel/Symfony Mailer, pilihan UI `TLS` diterjemahkan menjadi scheme `smtp`. Ini benar untuk Gmail port `587` karena koneksi memakai STARTTLS.
+
+Alternatif port SSL:
+
+```text
+SMTP Port: 465
+Encryption: ssl
+```
+
+Pada backend, pilihan UI `SSL` diterjemahkan menjadi scheme `smtps`. Jangan mengisi scheme backend dengan `tls`, karena Symfony Mailer hanya menerima `smtp` atau `smtps` untuk mailer SMTP.
+
+Urutan membuat Gmail App Password:
+
+1. Login ke akun Google yang akan dipakai sebagai pengirim.
+2. Buka `Google Account > Security`.
+3. Aktifkan `2-Step Verification` jika belum aktif.
+4. Buka `App passwords`.
+5. Buat app password baru untuk aplikasi email/SADIKA.
+6. Copy app password 16 karakter yang diberikan Google.
+7. Masukkan app password tersebut ke field `Password SMTP`.
+8. Jalankan `Kirim Test Email` dari Admin Settings.
+
+Catatan Gmail:
+
+- App Password hanya muncul sekali saat dibuat. Simpan di password manager.
+- Jika memakai Google Workspace perusahaan, admin Google Workspace bisa membatasi App Password.
+- Jika test email gagal, cek ulang 2-Step Verification, App Password, port, encryption, dan alamat `From Address`.
+
+### Troubleshooting SMTP
+
+Jika email tidak terkirim:
+
+1. Pastikan `Aktifkan email` menyala.
+2. Pastikan toggle jenis email terkait menyala.
+3. Pastikan `From Address` sesuai akun SMTP.
+4. Pastikan password SMTP benar.
+5. Cek log Laravel:
+
+```bash
+tail -f storage/logs/laravel.log
+```
+
+Jika production memakai Docker, cek log queue:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml logs -f queue
+```
+
 ## Nomor Surat
 
 Nomor publik disimpan di `letters.letter_number`.

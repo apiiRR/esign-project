@@ -8,8 +8,10 @@ class LetterSignatureRequest extends Model
 {
     protected $fillable = [
         'letter_id',
+        'letter_document_version_id',
         'requested_by',
         'signer_user_id',
+        'approval_type',
         'signing_order',
         'page_number',
         'x',
@@ -40,6 +42,11 @@ class LetterSignatureRequest extends Model
         return $this->belongsTo(Letter::class);
     }
 
+    public function documentVersion()
+    {
+        return $this->belongsTo(LetterDocumentVersion::class, 'letter_document_version_id');
+    }
+
     public function requester()
     {
         return $this->belongsTo(User::class, 'requested_by');
@@ -48,6 +55,16 @@ class LetterSignatureRequest extends Model
     public function signer()
     {
         return $this->belongsTo(User::class, 'signer_user_id');
+    }
+
+    public function isParaf(): bool
+    {
+        return $this->approval_type === 'paraf';
+    }
+
+    public function isSignature(): bool
+    {
+        return ($this->approval_type ?: 'signature') === 'signature';
     }
 
     public function otps()

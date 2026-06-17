@@ -6,7 +6,6 @@ use App\Models\Department;
 use App\Models\Directorate;
 use App\Models\Division;
 use App\Models\Letter;
-use App\Models\NotificationLog;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -26,6 +25,31 @@ class DispositionService
                 'directorates' => Directorate::query()->with('director:id,name')->where('status', 'active')->select('id', 'name', 'director_user_id')->orderBy('name')->get(),
                 'divisions' => Division::query()->with('generalManager:id,name')->where('status', 'active')->select('id', 'name', 'directorate_id', 'gm_user_id')->orderBy('name')->get(),
                 'departments' => Department::query()->with('manager:id,name')->where('status', 'active')->select('id', 'name', 'division_id', 'manager_user_id')->orderBy('name')->get(),
+            ];
+        }
+
+        if ($letter?->type === 'incoming_external' && (int) $letter->created_by === (int) $user->id) {
+            return [
+                'targetTypes' => ['directorate', 'division_gm', 'department_manager'],
+                'users' => collect(),
+                'directorates' => Directorate::query()
+                    ->with('director:id,name')
+                    ->where('status', 'active')
+                    ->select('id', 'name', 'director_user_id')
+                    ->orderBy('name')
+                    ->get(),
+                'divisions' => Division::query()
+                    ->with('generalManager:id,name')
+                    ->where('status', 'active')
+                    ->select('id', 'name', 'directorate_id', 'gm_user_id')
+                    ->orderBy('name')
+                    ->get(),
+                'departments' => Department::query()
+                    ->with('manager:id,name')
+                    ->where('status', 'active')
+                    ->select('id', 'name', 'division_id', 'manager_user_id')
+                    ->orderBy('name')
+                    ->get(),
             ];
         }
 
@@ -66,6 +90,25 @@ class DispositionService
             return;
         }
 
+        if ($letter?->type === 'incoming_external' && (int) $letter->created_by === (int) $user->id) {
+            if (! in_array($targetType, ['directorate', 'division_gm', 'department_manager'], true)) {
+                throw ValidationException::withMessages(['target_type' => 'Surat masuk eksternal hanya dapat didisposisikan ke Direktur, General Manager, atau Manager.']);
+            }
+
+            $exists = match ($targetType) {
+                'directorate' => Directorate::query()->where('status', 'active')->whereKey($targetId)->exists(),
+                'division_gm' => Division::query()->where('status', 'active')->whereKey($targetId)->exists(),
+                'department_manager' => Department::query()->where('status', 'active')->whereKey($targetId)->exists(),
+                default => false,
+            };
+
+            if (! $exists) {
+                throw ValidationException::withMessages(['target_id' => 'Target disposisi tidak valid atau tidak aktif.']);
+            }
+
+            return;
+        }
+
         $scope = $this->scopeFor($user);
         if (! in_array($targetType, $this->targetTypesForScope($scope), true)) {
             throw ValidationException::withMessages(['target_type' => 'Jenis target disposisi tidak sesuai dengan kewenangan unit Anda.']);
@@ -87,15 +130,17 @@ class DispositionService
         $this->resolveTargetUsers($targetType, $targetId)
             ->reject(fn ($id) => (int) $id === (int) $fromUser->id)
             ->unique()
-            ->each(function ($userId) use ($letter, $note) {
-                NotificationLog::query()->create([
-                    'user_id' => $userId,
-                    'letter_id' => $letter->id,
-                    'channel' => 'web',
-                    'title' => 'Disposisi baru',
-                    'body' => $note ?: $letter->subject,
-                    'sent_at' => now(),
-                ]);
+            ->each(function ($userId) use ($letter, $fromUser, $note) {
+                app(NotificationDeliveryService::class)->disposition(
+                    $userId,
+                    $letter,
+                    'Disposisi baru',
+                    $note ?: $letter->subject,
+                    [
+                        'sender_name' => $fromUser->name,
+                        'disposition_note' => $note ?: '-',
+                    ]
+                );
             });
     }
 

@@ -83,6 +83,8 @@ Generate `APP_KEY` bisa dilakukan dari mesin lokal atau container sementara. Yan
 
 Email SMTP bisa diatur dari halaman Admin Settings. `.env.production` tetap perlu `APP_URL` yang benar agar link verifikasi QR dan link aplikasi valid.
 
+Panduan lengkap pengisian SMTP, termasuk contoh Gmail `smtp.gmail.com`, ada di `docs/operations.md` bagian `Mengaktifkan SMTP Email Notifikasi`.
+
 ### 3. Build dan Start Container
 
 ```bash

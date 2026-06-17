@@ -2,7 +2,7 @@ import { AlertCircle } from "lucide-react";
 
 const friendlyMessages = {
     "The scan file failed to upload.":
-        "File gagal diunggah. Pastikan file PDF dan ukuran tidak melebihi batas upload server.",
+        "File gagal diunggah. Pastikan file PDF valid dan batas upload server mengizinkan ukuran file tersebut.",
 };
 
 function normalizeMessage(key, value) {

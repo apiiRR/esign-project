@@ -1,6 +1,6 @@
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
-import { Download, Paperclip, Save, Send, Trash2 } from "lucide-react";
+import { Download, Paperclip, Save, Send, Trash2, Upload } from "lucide-react";
 
 function formatInputDate(value) {
     if (!value) return "-";
@@ -20,6 +20,69 @@ function formatInputTime(value) {
     }).format(new Date(value));
 }
 
+function formatDate(value) {
+    if (!value) return "-";
+    return new Intl.DateTimeFormat("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(new Date(value));
+}
+
+function approvalTypeLabel(request) {
+    return request?.approval_type === "paraf" ? "Paraf" : "Tanda Tangan";
+}
+
+function approvalStatusLabel(status) {
+    return {
+        ready: "Siap diproses",
+        pending: "Menunggu",
+        signed: "Disetujui",
+        rejected: "Ditolak",
+    }[status] || status || "Menunggu";
+}
+
+function approvalRows(letter) {
+    const versions = letter.document_versions || [];
+    if (versions.length) {
+        return versions.flatMap((version) => {
+            const requests = version.signature_requests || [];
+
+            return requests.length
+                ? requests.map((request) => [
+                    `Versi ${version.version_number} · ${approvalTypeLabel(request)} ${request.signing_order}: ${request.signer?.name || "-"}`,
+                    request.approval_type === "paraf" ? "Approval sistem tanpa QR" : `Halaman ${request.page_number}`,
+                    approvalStatusLabel(request.status),
+                    request.signed_at ? `Disetujui ${formatDate(request.signed_at)}` : (request.rejected_at ? `Ditolak ${formatDate(request.rejected_at)}` : "Belum diproses"),
+                    request.note ? `Catatan: ${request.note}` : "",
+                ])
+                : [[`Versi ${version.version_number}`, "Belum ada approval"]];
+        });
+    }
+
+    return (letter.signature_requests || []).map((request) => [
+        `${approvalTypeLabel(request)} ${request.signing_order}: ${request.signer?.name || "-"}`,
+        request.approval_type === "paraf" ? "Approval sistem tanpa QR" : `Halaman ${request.page_number}`,
+        approvalStatusLabel(request.status),
+        request.signed_at ? `Disetujui ${formatDate(request.signed_at)}` : (request.rejected_at ? `Ditolak ${formatDate(request.rejected_at)}` : "Belum diproses"),
+        request.note ? `Catatan: ${request.note}` : "",
+    ]);
+}
+
+function versionRows(letter) {
+    return (letter.document_versions || []).map((version) => [
+        `Versi ${version.version_number}`,
+        `Status: ${version.status || "-"}`,
+        `Uploader: ${version.uploader?.name || "-"}`,
+        `Upload: ${formatDate(version.created_at)}`,
+        version.source_pdf_path ? `PDF sumber: /storage/${version.source_pdf_path}` : "",
+        version.signed_pdf_path ? `PDF signed: /storage/${version.signed_pdf_path}` : "",
+        version.rejection_note ? `Reject: ${version.rejection_note}` : "",
+    ]);
+}
+
 export default function LetterShow() {
     const { letter, notifications, targetOptions = {}, dispositionTargetOptions = {}, auth } = usePage().props;
     const isIncomingExternal = letter.type === "incoming_external";
@@ -28,6 +91,10 @@ export default function LetterShow() {
     const { data, setData, put, processing } = useForm({
         status: letter.status,
         letter_number: letter.letter_number || "",
+    });
+    const revisionForm = useForm({
+        revision_flow: "reuse",
+        scan_file: null,
     });
     const dispositionForm = useForm({
         letter_id: letter.id,
@@ -47,7 +114,20 @@ export default function LetterShow() {
             onSuccess: () => dispositionForm.reset("target_id", "note"),
         });
     };
+    const submitRevision = (e) => {
+        e.preventDefault();
+        revisionForm.post(`/admin/surat/${letter.id}/revisi-pdf`, { preserveScroll: true });
+    };
     const canDeleteDraft = letter.status === "draft" && String(letter.created_by) === String(auth?.user?.id);
+    const currentVersionPath = letter.current_version?.signed_pdf_path
+        || letter.current_version?.source_pdf_path
+        || letter.signed_pdf_path
+        || letter.attachments?.[0]?.file_path;
+    const canUploadRevision =
+        isInternal &&
+        String(letter.created_by) === String(auth?.user?.id) &&
+        letter.signature_status === "rejected" &&
+        (letter.signature_requests || []).length > 0;
 
     return (
         <>
@@ -73,9 +153,9 @@ export default function LetterShow() {
                                 </button>
                             </div>
                         ) : null}
-                        {letter.attachments?.[0] ? (
+                        {currentVersionPath ? (
                             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                                <iframe title="Preview PDF" src={`/storage/${letter.attachments[0].file_path}`} className="h-[520px] md:h-[720px] w-full bg-gray-100" />
+                                <iframe title="Preview PDF" src={`/storage/${currentVersionPath}`} className="h-[520px] md:h-[720px] w-full bg-gray-100" />
                             </div>
                         ) : (
                             <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -96,14 +176,8 @@ export default function LetterShow() {
                             ...(letter.payload?.notes ? [["Catatan", letter.payload.notes]] : []),
                         ]} />
                         {!isIncomingExternal ? <Panel title="Target dan Tebusan" rows={letter.targets?.map((x) => [x.kind === "cc" ? "Tembusan" : "Tujuan", targetLabel(x, targetOptions)])} /> : null}
-                        {isInternal ? (
-                            <Panel title="Permintaan Tanda Tangan QR" rows={letter.signature_requests?.map((request) => [
-                                `TTD ${request.signing_order}: ${request.signer?.name || "-"}`,
-                                `Halaman ${request.page_number}`,
-                                `Posisi ${(Number(request.x) * 100).toFixed(1)}%, ${(Number(request.y) * 100).toFixed(1)}%`,
-                                request.status || "pending",
-                            ])} />
-                        ) : null}
+                        {isInternal ? <Panel title="Approval Dokumen" rows={approvalRows(letter)} /> : null}
+                        {isInternal ? <Panel title="Riwayat Versi Dokumen" rows={versionRows(letter)} /> : null}
                         {!isInternal && !isOutgoing ? <Panel title="Disposisi" rows={letter.dispositions?.map((x) => [
                             `Dari: ${x.from_user?.name || "-"}`,
                             `Tujuan: ${targetLabel(x, targetOptions)}`,
@@ -133,6 +207,23 @@ export default function LetterShow() {
                             processing={dispositionForm.processing}
                         />
                         <Panel title="Status Baca" rows={letter.read_receipts?.map((x) => [x.user?.name || "-", x.read_at || "belum dibaca"])} />
+                        {canUploadRevision ? (
+                            <form onSubmit={submitRevision} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+                                <h2 className="font-semibold text-gray-950">Upload PDF Revisi</h2>
+                                <p className="mt-1 text-sm text-gray-500">Approval ditolak. Upload PDF baru untuk menjalankan ulang alur approval sebelumnya.</p>
+                                <input
+                                    type="file"
+                                    accept="application/pdf,.pdf"
+                                    onChange={(event) => revisionForm.setData("scan_file", event.target.files?.[0] || null)}
+                                    className="mt-4 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                />
+                                {revisionForm.errors.scan_file ? <div className="mt-2 text-xs text-red-600">{revisionForm.errors.scan_file}</div> : null}
+                                <button disabled={revisionForm.processing || !revisionForm.data.scan_file} className="mt-4 inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Upload Revisi
+                                </button>
+                            </form>
+                        ) : null}
                         <Panel title="Informasi Halaman" rows={[[`${letter.page_count || 1} Halaman`, `Lampiran: ${letter.page_count || 1} Halaman`]]} />
                     </div>
                 </div>

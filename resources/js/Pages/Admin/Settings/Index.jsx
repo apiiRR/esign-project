@@ -22,6 +22,7 @@ export default function SettingsIndex() {
         mail_encryption: setting?.mail_encryption || "tls",
         mail_from_address: setting?.mail_from_address || "",
         mail_from_name: setting?.mail_from_name || setting?.app_name || "",
+        mail_templates: setting?.mail_templates || {},
         _method: "PUT",
     });
     const testEmailForm = useForm({ test_email: "" });
@@ -42,6 +43,14 @@ export default function SettingsIndex() {
         outgoing: "Surat Keluar",
         archive: "Arsip Scan",
     };
+    const mailTemplateDefinitions = {
+        surat_tujuan: "Surat Tujuan",
+        surat_tebusan: "Surat Tembusan",
+        disposisi: "Disposisi",
+        approval_tte: "Approval TTE",
+        surat_publish: "Surat Publish",
+    };
+    const placeholderGuide = "{app_name}, {recipient_name}, {sender_name}, {letter_number}, {letter_subject}, {letter_type}, {disposition_note}, {action_url}";
 
     function toggleRequirement(context, field) {
         setData("letter_field_requirements", {
@@ -49,6 +58,16 @@ export default function SettingsIndex() {
             [context]: {
                 ...(data.letter_field_requirements?.[context] || {}),
                 [field]: !Boolean(data.letter_field_requirements?.[context]?.[field]),
+            },
+        });
+    }
+
+    function updateMailTemplate(type, field, value) {
+        setData("mail_templates", {
+            ...(data.mail_templates || {}),
+            [type]: {
+                ...(data.mail_templates?.[type] || {}),
+                [field]: value,
             },
         });
     }
@@ -143,6 +162,32 @@ export default function SettingsIndex() {
                             <Field label="From Name" value={data.mail_from_name} onChange={(v) => setData("mail_from_name", v)} error={errors.mail_from_name} />
                         </div>
 
+                        <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <div className="text-sm font-semibold text-gray-950">Template Email Notifikasi</div>
+                            <p className="mt-1 text-xs text-gray-500">
+                                Template default sudah tersedia dan bisa diedit sesuai kebutuhan. Placeholder yang tersedia: {placeholderGuide}
+                            </p>
+                            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                                {Object.entries(mailTemplateDefinitions).map(([type, label]) => (
+                                    <div key={type} className="rounded-lg border border-gray-200 bg-white p-4">
+                                        <div className="mb-3 text-sm font-semibold text-gray-950">{label}</div>
+                                        <Field
+                                            label="Subject"
+                                            value={data.mail_templates?.[type]?.subject || ""}
+                                            onChange={(value) => updateMailTemplate(type, "subject", value)}
+                                            error={errors[`mail_templates.${type}.subject`]}
+                                        />
+                                        <TextareaField
+                                            label="Body"
+                                            value={data.mail_templates?.[type]?.body || ""}
+                                            onChange={(value) => updateMailTemplate(type, "body", value)}
+                                            error={errors[`mail_templates.${type}.body`]}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="mt-5 grid gap-4 lg:grid-cols-2">
                             <div className="rounded-lg border border-sky-100 bg-sky-50 p-4 text-sm text-sky-900">
                                 <div className="mb-2 flex items-center gap-2 font-semibold">
@@ -229,6 +274,21 @@ function Field({ label, value, onChange, type = "text", error }) {
         <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">{label}</label>
             <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className={`w-full rounded-lg border px-3 py-2.5 text-sm ${error ? "border-red-500" : "border-gray-300"}`} />
+            {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
+        </div>
+    );
+}
+
+function TextareaField({ label, value, onChange, error }) {
+    return (
+        <div className="mt-3">
+            <label className="mb-2 block text-sm font-medium text-gray-700">{label}</label>
+            <textarea
+                rows={5}
+                value={value || ""}
+                onChange={(event) => onChange(event.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-emerald-600 focus:outline-none"
+            />
             {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : null}
         </div>
     );

@@ -234,6 +234,62 @@ Restart worker queue setelah deploy:
 docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan queue:restart
 ```
 
+## Troubleshooting Cache dan Route Production
+
+Jika log production menampilkan error berikut:
+
+```text
+SQLSTATE[42P01]: Undefined table: relation "cache" does not exist
+select * from "cache" where "key" in (... queue:restart)
+```
+
+Artinya aplikasi memakai `CACHE_STORE=database`, tetapi migration tabel cache belum berhasil dijalankan pada database production yang sedang dipakai. Project ini sudah memiliki migration `create_cache_table`, jadi jangan membuat tabel manual. Jalankan:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan migrate --force
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan optimize:clear
+docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler
+```
+
+Dengan `sudo`:
+
+```bash
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan migrate --force
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan optimize:clear
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler
+```
+
+Verifikasi tabel inti sudah ada:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan tinker --execute="dump(Schema::hasTable('cache'), Schema::hasTable('jobs'), Schema::hasTable('sessions'))"
+```
+
+Jika log menampilkan error berikut:
+
+```text
+require(/var/www/html/bootstrap/cache/routes-v7.php): Failed to open stream: No such file or directory
+```
+
+Artinya cache route/config di container mengarah ke file lama yang sudah tidak ada. Bersihkan cache lalu buat ulang:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan optimize:clear
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan config:cache
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan route:cache
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan view:cache
+docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler nginx
+```
+
+Jika sedang debug error submit dokumen, jalankan sementara tanpa cache:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan optimize:clear
+docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler nginx
+```
+
+Setelah error selesai, aktifkan lagi cache dengan `config:cache`, `route:cache`, dan `view:cache`.
+
 ## Update Aplikasi
 
 ```bash

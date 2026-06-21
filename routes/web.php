@@ -66,15 +66,15 @@ Route::prefix('admin')->name('admin.')->group(function() {
         Route::get('/dashboard', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
         Route::get('/dokumentasi', [App\Http\Controllers\DocumentationController::class, 'admin'])->name('documentation');
 
-        Route::redirect('/surat/masuk-eksternal', '/admin/surat/internal');
-        Route::redirect('/surat/keluar', '/admin/surat/internal');
-        Route::redirect('/surat/arsip', '/admin/surat/internal');
+        Route::get('/surat/masuk-eksternal', fn () => redirect('/admin/surat/internal'));
+        Route::get('/surat/keluar', fn () => redirect('/admin/surat/internal'));
+        Route::get('/surat/arsip', fn () => redirect('/admin/surat/internal'));
         Route::get('/surat/internal', [App\Http\Controllers\Admin\LetterController::class, 'index'])
             ->defaults('type', 'internal')
             ->name('surat.internal');
-        Route::redirect('/surat/create/masuk-eksternal', '/admin/surat/create/internal');
-        Route::redirect('/surat/create/keluar', '/admin/surat/create/internal');
-        Route::redirect('/surat/create/arsip', '/admin/surat/create/internal');
+        Route::get('/surat/create/masuk-eksternal', fn () => redirect('/admin/surat/create/internal'));
+        Route::get('/surat/create/keluar', fn () => redirect('/admin/surat/create/internal'));
+        Route::get('/surat/create/arsip', fn () => redirect('/admin/surat/create/internal'));
         Route::get('/surat/create/{mode}', [App\Http\Controllers\Admin\LetterController::class, 'create'])
             ->name('surat.create');
         Route::post('/surat', [App\Http\Controllers\Admin\LetterController::class, 'store'])
@@ -160,11 +160,11 @@ Route::prefix('user')->name('user.')->middleware('auth')->group(function() {
         ->defaults('mode', 'index')
         ->name('dashboard');
 
-    Route::redirect('/inbox/internal', '/user/surat')->name('inbox.internal');
-    Route::redirect('/inbox/tebusan', '/user/surat')->name('inbox.tebusan');
-    Route::redirect('/disposisi', '/user/surat')->name('disposisi');
+    Route::get('/inbox/internal', fn () => redirect('/user/surat'))->name('inbox.internal');
+    Route::get('/inbox/tebusan', fn () => redirect('/user/surat'))->name('inbox.tebusan');
+    Route::get('/disposisi', fn () => redirect('/user/surat'))->name('disposisi');
 
-    Route::redirect('/approval', '/user/surat')->name('approval.index');
+    Route::get('/approval', fn () => redirect('/user/surat'))->name('approval.index');
 
     Route::get('/approval/{signatureRequest}', [App\Http\Controllers\User\PortalController::class, 'approvalShow'])
         ->name('approval.show');
@@ -178,18 +178,18 @@ Route::prefix('user')->name('user.')->middleware('auth')->group(function() {
     Route::post('/approval/{signatureRequest}/approve', [App\Http\Controllers\User\PortalController::class, 'approveSignature'])
         ->name('approval.approve');
 
-    Route::redirect('/surat', '/user/dashboard')->name('surat.index');
+    Route::get('/surat', fn () => redirect('/user/dashboard'))->name('surat.index');
 
     Route::get('/surat/create', [App\Http\Controllers\User\PortalController::class, 'workspace'])
         ->defaults('section', 'create')
         ->defaults('mode', 'internal')
         ->name('surat.create');
 
-    Route::redirect('/surat/internal', '/user/surat/create')->name('surat.internal');
+    Route::get('/surat/internal', fn () => redirect('/user/surat/create'))->name('surat.internal');
 
-    Route::redirect('/surat/keluar', '/user/surat');
-    Route::redirect('/surat/masuk-eksternal', '/user/surat');
-    Route::redirect('/surat/arsip', '/user/surat');
+    Route::get('/surat/keluar', fn () => redirect('/user/surat'));
+    Route::get('/surat/masuk-eksternal', fn () => redirect('/user/surat'));
+    Route::get('/surat/arsip', fn () => redirect('/user/surat'));
 
     Route::post('/surat/internal', [App\Http\Controllers\User\PortalController::class, 'storeInternal'])
         ->name('surat.internal.store');

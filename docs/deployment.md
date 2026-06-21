@@ -47,11 +47,29 @@ Production memakai Docker Compose dengan service:
 
 ### 1. Install Docker
 
-Di Ubuntu, install Docker Engine dan Docker Compose Plugin mengikuti dokumentasi resmi Docker. Setelah selesai, pastikan command ini berjalan:
+Di Ubuntu, install Docker Engine dan Docker Compose Plugin:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl git openssl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+```
+
+Logout/login ulang agar group `docker` aktif. Jika belum logout, command Docker masih bisa dijalankan dengan `sudo`.
+
+Pastikan command ini berjalan:
 
 ```bash
 docker --version
 docker compose version
+```
+
+Clone project ke VM:
+
+```bash
+git clone <repo-project> ~/esign-project
+cd ~/esign-project
 ```
 
 ### 2. Siapkan Environment Production
@@ -79,7 +97,27 @@ DB_USERNAME=surat_user
 DB_PASSWORD=password-kuat
 ```
 
-Generate `APP_KEY` bisa dilakukan dari mesin lokal atau container sementara. Yang penting nilai `APP_KEY` production harus disimpan dan tidak berubah, karena dipakai untuk enkripsi data seperti password SMTP.
+Generate `APP_KEY` paling aman di VM tanpa perlu `vendor/` atau `composer install`:
+
+```bash
+openssl rand -base64 32
+```
+
+Masukkan hasilnya ke `.env.production` dengan prefix `base64:`:
+
+```env
+APP_KEY=base64:HASIL_OPENSSL_DI_SINI
+```
+
+Simpan nilai `APP_KEY` production dan jangan diganti setelah aplikasi berjalan. Key ini dipakai untuk enkripsi data, termasuk password SMTP di Settings.
+
+Jangan menjalankan command ini sebelum dependency/container siap:
+
+```bash
+php artisan key:generate --show
+```
+
+Command tersebut membutuhkan `vendor/autoload.php`. Di production Docker, semua command Laravel sebaiknya dijalankan dari service `app` setelah image selesai dibuild.
 
 Email SMTP bisa diatur dari halaman Admin Settings. `.env.production` tetap perlu `APP_URL` yang benar agar link verifikasi QR dan link aplikasi valid.
 
@@ -91,7 +129,7 @@ Panduan lengkap pengisian SMTP, termasuk contoh Gmail `smtp.gmail.com`, ada di `
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
-Jalankan migration:
+Jalankan migration dari container `app`:
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan migrate --force
@@ -103,6 +141,14 @@ Jika perlu seed awal:
 docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan db:seed --force
 ```
 
+Optimasi cache Laravel:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan config:cache
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan route:cache
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan view:cache
+```
+
 Buka aplikasi:
 
 ```text
@@ -110,6 +156,51 @@ http://IP-VM:8080
 ```
 
 Jika memakai domain dan reverse proxy, arahkan reverse proxy ke port `APP_HTTP_PORT`.
+
+## Catatan Composer dan APP_KEY di VM
+
+Untuk project ini, hindari menjalankan `composer:2 install` hanya untuk generate `APP_KEY`. Image `composer:2` standar belum tentu punya ekstensi PHP yang dibutuhkan project, misalnya `ext-gd`. Error yang mungkin muncul:
+
+```text
+phpoffice/phpspreadsheet requires ext-gd
+setasign/fpdf requires ext-gd
+```
+
+Itu normal jika memakai image Composer generik. Cara yang direkomendasikan:
+
+1. Generate `APP_KEY` dengan `openssl rand -base64 32`.
+2. Build image production project dengan Docker Compose.
+3. Jalankan `php artisan` hanya dari container `app`.
+
+Jika muncul error berikut:
+
+```text
+vendor/autoload.php: No such file or directory
+```
+
+Artinya dependency belum tersedia di environment tempat command dijalankan. Jangan jalankan `php artisan` dari host atau image `php:8.3-cli` mentah. Jalankan dari container app:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan about
+```
+
+Jika muncul warning Git:
+
+```text
+fatal: detected dubious ownership in repository
+```
+
+Tambahkan safe directory di host:
+
+```bash
+git config --global --add safe.directory ~/esign-project
+```
+
+Jika command memakai `sudo`, gunakan:
+
+```bash
+sudo git config --global --add safe.directory /home/<user>/esign-project
+```
 
 ## Command Operasional
 
@@ -258,6 +349,15 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec app ph
 ```
 
 ## Checklist Production
+
+- `.env.production` sudah berisi `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL`, `ASSET_URL`, `APP_KEY`, dan kredensial database.
+- `APP_KEY` dibuat sekali dan disimpan aman.
+- Container `nginx`, `app`, `queue`, `scheduler`, dan `postgres` statusnya `running`.
+- Migration dan seeder berhasil dijalankan.
+- Queue worker berjalan untuk email/OTP.
+- Domain/SSL mengarah ke `APP_HTTP_PORT`.
+- Preview PDF.js worker mengirim MIME `application/javascript`.
+- Backup database dan storage sudah dijadwalkan.
 
 - `APP_ENV=production`
 - `APP_DEBUG=false`

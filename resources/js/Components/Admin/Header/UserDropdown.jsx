@@ -9,27 +9,27 @@ export default function UserDropdown({ auth, activeDropdown, toggleDropdown }) {
 
     // User navigation
     const userNavigation = [
-        { 
-            name: "Settings", 
-            href: "/admin/settings",
-            icon: Settings
-        },
         {
-            name: "Dokumentasi",
-            href: "/admin/dokumentasi",
-            icon: BookOpen
+            name: "Settings",
+            href: "/admin/settings",
+            icon: Settings,
         },
+        // {
+        //     name: "Dokumentasi",
+        //     href: "/admin/dokumentasi",
+        //     icon: BookOpen
+        // },
         {
             name: "Log Viewer",
             href: "/log-viewer",
             icon: FileSearch,
-            external: true
+            external: true,
         },
-        { 
-            name: "Sign out", 
-            href: "/admin/logout", 
+        {
+            name: "Sign out",
+            href: "/admin/logout",
             method: "post",
-            icon: LogOut
+            icon: LogOut,
         },
     ];
 

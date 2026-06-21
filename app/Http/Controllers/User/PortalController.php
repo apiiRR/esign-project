@@ -414,8 +414,13 @@ class PortalController extends Controller
         } catch (Throwable $exception) {
             Log::error('Gagal menyimpan dokumen dari portal user.', [
                 'user_id' => $request->user()?->id,
+                'route' => $request->route()?->getName(),
+                'path' => $request->path(),
+                'content_length' => $request->server('CONTENT_LENGTH'),
                 'exception' => $exception->getMessage(),
                 'exception_class' => $exception::class,
+                'file' => $exception->getFile(),
+                'line' => $exception->getLine(),
             ]);
 
             return back()
@@ -962,11 +967,13 @@ class PortalController extends Controller
                 ]);
             }
 
-            if ($letter->status === 'sent' && $letter->signatureRequests()->exists()) {
+            if ($attachment && $letter->signatureRequests()->exists()) {
                 $signatureService = app(LetterSignatureService::class);
-                if ($attachment) {
-                    $signatureService->createInitialVersion($letter, $attachment, $user);
-                }
+                $signatureService->createInitialVersion($letter, $attachment, $user);
+            }
+
+            if ($letter->status === 'sent' && $letter->signatureRequests()->exists()) {
+                $signatureService ??= app(LetterSignatureService::class);
                 $signatureService->initializeRequests($letter->fresh(['attachments', 'currentVersion']));
             }
 

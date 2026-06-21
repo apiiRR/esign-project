@@ -947,6 +947,8 @@ function CreatePage() {
 
     async function submit(e, action = "send") {
         e.preventDefault();
+        if (submitting) return;
+
         setClientErrors([]);
         if (isInternal && action === "send") {
             if (!data.signature_requests.length) {
@@ -1027,7 +1029,7 @@ function CreatePage() {
             <div className="mb-5">
                 <FormErrorSummary errors={formErrors} extraErrors={clientErrors} />
             </div>
-            <form onSubmit={submit} className="grid gap-6 xl:grid-cols-12">
+            <form onSubmit={(event) => submit(event, "send")} className="grid gap-6 xl:grid-cols-12">
                 <div className="space-y-5 xl:col-span-6">
                     <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                         <Field
@@ -1122,8 +1124,9 @@ function CreatePage() {
                             Batal
                         </Link>
                         <button
-                            type="submit"
+                            type="button"
                             disabled={submitting}
+                            onClick={(event) => submit(event, "send")}
                             className="inline-flex items-center rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
                         >
                             <Send className="mr-2 h-4 w-4" />

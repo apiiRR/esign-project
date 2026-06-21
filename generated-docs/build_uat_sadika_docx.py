@@ -216,7 +216,7 @@ def build_document_xml() -> bytes:
     body.append(p("Pada hari Rabu, 17 Juni 2026 menerangkan bahwa:", size=22))
     body.append(table([
         ["Update", "SADIKA — Surat dan Arsip Digital Berdikari"],
-        ["Requested By", "PT Berdikari"],
+        ["Requested By", "PT XYZ"],
     ], [2600, 11800], header=False))
     body.append(p("Telah dilakukan User Acceptance Test, dengan hasil sebagai berikut:", size=22))
     body.append(table(rows, [700, 2300, 4200, 5200, 1000, 1000], header=True))

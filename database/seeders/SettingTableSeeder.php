@@ -17,8 +17,8 @@ class SettingTableSeeder extends Seeder
         DB::table('settings')->truncate();
 
         DB::table('settings')->insert([
-            'app_name' => 'Surat dan Arsip Digital Berdikari',
-            'company_name' => 'PT Berdikari',
+            'app_name' => 'Surat dan Arsip Digital PT XYZ',
+            'company_name' => 'PT XYZ',
             'company_code' => 'APP',
             'company_logo' => null,
             'login_logo' => null,

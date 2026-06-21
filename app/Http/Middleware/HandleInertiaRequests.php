@@ -48,13 +48,13 @@ class HandleInertiaRequests extends Middleware
         $settings = Schema::hasTable('settings')
             ? (Setting::query()->first()?->toArray() ?: [
                 'app_name' => 'Surat dan Arsip Digital Berdikari',
-                'company_name' => 'PT Berdikari',
+                'company_name' => 'PT XYZ',
                 'company_logo' => null,
                 'login_logo' => null,
             ])
             : [
                 'app_name' => 'Surat dan Arsip Digital Berdikari',
-                'company_name' => 'PT Berdikari',
+                'company_name' => 'PT XYZ',
                 'company_logo' => null,
                 'login_logo' => null,
             ];

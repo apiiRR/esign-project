@@ -25,7 +25,7 @@ class UserTableSeeder extends Seeder
         $admin = User::create([
             'username' => 'admin',
             'name' => 'Administrator',
-            'email' => 'admin@berdikari.co.id',
+            'email' => 'admin@xyz.co.id',
             'password' => bcrypt('password'),
             'role' => 'admin',
             'directorate_id' => $directorate?->id,
@@ -38,7 +38,7 @@ class UserTableSeeder extends Seeder
         $user = User::create([
             'username' => 'user',
             'name' => 'Arif Setiawan',
-            'email' => 'arif.setiawan@berdikari.co.id',
+            'email' => 'arif.setiawan@xyz.co.id',
             'password' => bcrypt('password'),
             'role' => 'user',
             'directorate_id' => $directorate?->id,

@@ -18,7 +18,7 @@ export default defineConfig({
             manifest: {
                 name: 'Surat dan Arsip Digital Berdikari',
                 short_name: 'SADIKA',
-                description: 'Aplikasi persuratan dan arsip digital PT Berdikari.',
+                description: 'Aplikasi persuratan dan arsip digital PT XYZ.',
                 lang: 'id',
                 start_url: '/login',
                 scope: '/',

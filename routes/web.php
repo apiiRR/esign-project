@@ -151,7 +151,7 @@ Route::prefix('admin')->name('admin.')->group(function() {
 
 
 // ==============================================
-// ROUTES USER PT BERDIKARI
+// ROUTES USER PT XYZ
 // ==============================================
 
 Route::prefix('user')->name('user.')->middleware('auth')->group(function() {

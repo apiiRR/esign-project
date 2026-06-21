@@ -1,5 +1,5 @@
 export const DEFAULT_APP_NAME = "Surat dan Arsip Digital Berdikari";
-export const DEFAULT_COMPANY_NAME = "PT Berdikari";
+export const DEFAULT_COMPANY_NAME = "PT XYZ";
 
 export function appName(settings) {
     return settings?.app_name || DEFAULT_APP_NAME;

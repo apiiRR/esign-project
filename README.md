@@ -1,6 +1,6 @@
 # Surat dan Arsip Digital Berdikari
 
-Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, Tailwind CSS, dan PWA untuk PT Berdikari. Aplikasi ini mengelola surat masuk eksternal, surat internal, surat keluar, arsip scan, disposisi, status baca, template Nota Dinas, nomor surat otomatis, log teknis, dan notifikasi dasar.
+Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, Tailwind CSS, dan PWA untuk PT XYZ. Aplikasi ini mengelola surat masuk eksternal, surat internal, surat keluar, arsip scan, disposisi, status baca, template Nota Dinas, nomor surat otomatis, log teknis, dan notifikasi dasar.
 
 ## Fitur Utama
 
@@ -15,9 +15,9 @@ Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, Tailwind 
 - Read receipt, notification log, dan Laravel Log Viewer untuk error teknis.
 - PWA installable minimal untuk laptop dan perangkat mobile.
 - Dokumentasi aplikasi:
-  - Admin: `/admin/dokumentasi`
-  - User: `/user/dokumentasi`
-  - Developer public: `/developer-docs`
+    - Admin: `/admin/dokumentasi`
+    - User: `/user/dokumentasi`
+    - Developer public: `/developer-docs`
 - Dokumentasi teknis source code tersedia di folder [`docs/`](docs/README.md).
 
 ## Dokumentasi Teknis Developer

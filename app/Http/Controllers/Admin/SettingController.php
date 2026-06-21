@@ -216,7 +216,7 @@ class SettingController extends Controller implements HasMiddleware
     {
         $defaults = [
             'app_name' => 'Surat dan Arsip Digital Berdikari',
-            'company_name' => 'PT Berdikari',
+            'company_name' => 'PT XYZ',
             'company_code' => 'BDRK',
             'mail_templates' => Setting::defaultMailTemplates(),
         ];

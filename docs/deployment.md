@@ -243,6 +243,84 @@ docker compose --env-file .env.production -f docker-compose.prod.yml exec app ph
 docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan queue:restart
 ```
 
+## Reset atau Refresh Data Production
+
+Gunakan langkah ini jika production baru dipakai untuk testing dan ingin mengembalikan database ke kondisi awal seperti fresh install.
+
+Peringatan: command ini akan menghapus seluruh data database production. Jalankan hanya jika data test memang boleh dihapus.
+
+### 1. Backup Sebelum Reset
+
+Sesuaikan `DB_USERNAME` dan `DB_DATABASE` dengan nilai di `.env.production`.
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec postgres pg_dump -U surat_user surat_digital > backup-before-reset.sql
+```
+
+Jika command memakai `sudo` di VM:
+
+```bash
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec postgres pg_dump -U surat_user surat_digital > backup-before-reset.sql
+```
+
+### 2. Reset Database dan Seed Ulang
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan migrate:fresh --seed --force
+```
+
+Dengan `sudo`:
+
+```bash
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan migrate:fresh --seed --force
+```
+
+### 3. Restart Queue
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan queue:restart
+```
+
+Dengan `sudo`:
+
+```bash
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan queue:restart
+```
+
+### 4. Opsional: Hapus File Upload Test
+
+Database reset tidak otomatis menghapus file PDF/logo/signature yang sudah tersimpan di storage. Jika ingin membersihkan file test juga, masuk ke container app:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app sh
+```
+
+Dengan `sudo`:
+
+```bash
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec app sh
+```
+
+Lalu jalankan di dalam container:
+
+```bash
+rm -rf storage/app/public/letters/*
+rm -rf storage/app/public/surat/*
+rm -rf storage/app/public/signatures/*
+rm -rf storage/app/private/tmp/downloads/*
+exit
+```
+
+Jangan hapus `storage/app/public/settings/*` jika ingin mempertahankan logo aplikasi dan file contoh watermark yang sudah diupload dari halaman Settings.
+
+### 5. Refresh Cache Setelah Reset
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan config:clear
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan config:cache
+docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler nginx
+```
+
 ## Backup dan Restore PostgreSQL
 
 Backup database:

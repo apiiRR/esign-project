@@ -10,7 +10,7 @@ import { Save } from "lucide-react";
 
 // import component PageHeader
 import PageHeader from "@/Shared/PageHeader";
-import PermissionChecklist, { groupPermissions } from "./PermissionChecklist";
+import PermissionChecklist from "./PermissionChecklist";
 
 export default function RolesCreate() {
 
@@ -22,9 +22,6 @@ export default function RolesCreate() {
         name: "",
         permissions: [],
     });
-
-    // group permission berdasarkan prefix (roles.*, users.*, dll)
-    const groupedPermissions = groupPermissions(permissions);
 
     // fungsi togglePermission
     const togglePermission = (id) => {
@@ -88,11 +85,11 @@ export default function RolesCreate() {
                             {/* Permissions */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-3">
-                                    Permissions
+                                    Hak Akses
                                 </label>
 
                                 <PermissionChecklist
-                                    groupedPermissions={groupedPermissions}
+                                    permissions={permissions}
                                     selectedPermissions={data.permissions}
                                     onToggle={togglePermission}
                                 />

@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Routing\Controllers\HasMiddleware;
 
@@ -57,7 +58,10 @@ class UserController extends Controller implements HasMiddleware
         return Inertia::render('Admin/Users/Index', [
             'users' => $users,
             'filterOptions' => [
-                'roles' => Role::select('name as id', 'name')->orderBy('name')->get(),
+                'roles' => collect([
+                    ['id' => 'admin', 'name' => 'Admin'],
+                    ['id' => 'user', 'name' => 'User'],
+                ]),
                 'statuses' => collect([['id' => 'active', 'name' => 'Aktif'], ['id' => 'inactive', 'name' => 'Nonaktif']]),
             ],
         ]);
@@ -88,13 +92,13 @@ class UserController extends Controller implements HasMiddleware
             'name'     => 'required|string|max:255',
             'email'    => 'nullable|email|unique:users,email',
             'password' => 'required|min:8',
-            'roles'    => 'required|array',
-            'roles.*'  => 'exists:roles,id',
+            'role' => 'required|in:admin,user',
+            'can_create_documents' => 'nullable|boolean',
             'position' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
         ]);
 
-        $roleName = Role::whereIn('id', $request->roles)->orderBy('name')->value('name') ?: 'user';
+        $roleName = $request->input('role', 'user');
 
         $user = User::create([
             'username' => $request->username,
@@ -106,10 +110,10 @@ class UserController extends Controller implements HasMiddleware
             'status' => $request->status,
         ]);
 
-        // assign role
-        $user->syncRoles($request->roles);
+        $this->syncUserAccess($user, $roleName, $request->boolean('can_create_documents'));
         app(AuditTrailService::class)->log($request, $request->user(), 'user', 'created', 'Membuat user baru.', $user, [
             'target_user' => $user->only(['id', 'username', 'email', 'role', 'status']),
+            'can_create_documents' => $roleName === 'user' && $request->boolean('can_create_documents'),
         ]);
 
         return redirect()
@@ -130,7 +134,7 @@ class UserController extends Controller implements HasMiddleware
         return Inertia::render('Admin/Users/Edit', [
             'user' => $user,
             ...$this->formOptions(),
-            'userRoles' => $user->roles->pluck('id'),
+            'canCreateDocuments' => $this->canCreateDocuments($user),
         ]);
     }
 
@@ -148,13 +152,13 @@ class UserController extends Controller implements HasMiddleware
             'name'     => 'required|string|max:255',
             'email'    => 'nullable|email|unique:users,email,' . $user->id,
             'password' => 'nullable|min:8',
-            'roles'    => 'required|array',
-            'roles.*'  => 'exists:roles,id',
+            'role' => 'required|in:admin,user',
+            'can_create_documents' => 'nullable|boolean',
             'position' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
         ]);
 
-        $roleName = Role::whereIn('id', $request->roles)->orderBy('name')->value('name') ?: 'user';
+        $roleName = $request->input('role', 'user');
 
         $user->update([
             'username' => $request->username,
@@ -172,10 +176,10 @@ class UserController extends Controller implements HasMiddleware
             ]);
         }
 
-        // sync role
-        $user->syncRoles($request->roles);
+        $this->syncUserAccess($user, $roleName, $request->boolean('can_create_documents'));
         app(AuditTrailService::class)->log($request, $request->user(), 'user', 'updated', 'Mengubah data user.', $user, [
             'target_user' => $user->only(['id', 'username', 'email', 'role', 'status']),
+            'can_create_documents' => $roleName === 'user' && $request->boolean('can_create_documents'),
         ]);
 
         return redirect()
@@ -204,7 +208,37 @@ class UserController extends Controller implements HasMiddleware
     private function formOptions(): array
     {
         return [
-            'roles' => Role::select('id','name')->orderBy('name')->get(),
+            'roleOptions' => collect([
+                ['id' => 'admin', 'name' => 'Admin'],
+                ['id' => 'user', 'name' => 'User'],
+            ]),
         ];
+    }
+
+    private function syncUserAccess(User $user, string $roleName, bool $canCreateDocuments): void
+    {
+        Role::firstOrCreate(['name' => 'admin', 'guard_name' => 'web']);
+        Role::firstOrCreate(['name' => 'user', 'guard_name' => 'web']);
+
+        $permission = Permission::firstOrCreate([
+            'name' => 'user.letters.create',
+            'guard_name' => 'web',
+        ]);
+
+        $user->syncRoles([$roleName]);
+
+        if ($roleName === 'user' && $canCreateDocuments) {
+            $user->givePermissionTo($permission);
+            return;
+        }
+
+        $user->revokePermissionTo($permission);
+    }
+
+    private function canCreateDocuments(User $user): bool
+    {
+        $permission = Permission::where('name', 'user.letters.create')->first();
+
+        return $permission ? $user->hasDirectPermission($permission) : false;
     }
 }

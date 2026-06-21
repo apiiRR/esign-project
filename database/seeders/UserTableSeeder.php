@@ -51,14 +51,16 @@ class UserTableSeeder extends Seeder
         $adminRole = Role::where('name', 'admin')->first();
         $userRole = Role::where('name', 'user')->first();
 
-        $adminRole->syncPermissions(Permission::all());
-        $userRole->syncPermissions(Permission::whereIn('name', [
-            'user.dashboard',
-            'user.letters.create',
-        ])->get());
+        $adminRole->syncPermissions([]);
+        $userRole->syncPermissions([]);
+        $createDocumentPermission = Permission::firstOrCreate([
+            'name' => 'user.letters.create',
+            'guard_name' => 'web',
+        ]);
 
         $admin->assignRole($adminRole);
         $user->assignRole($userRole);
+        $user->givePermissionTo($createDocumentPermission);
 
         if ($directorate) {
             $directorate->update(['director_user_id' => $admin->id]);

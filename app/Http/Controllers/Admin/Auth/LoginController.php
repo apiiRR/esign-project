@@ -53,7 +53,7 @@ class LoginController extends Controller
             $user->update(['last_login_at' => now()]);
             $auditTrail->log($request, $user, 'login', 'login_success', 'Login berhasil.');
 
-            return $user->role === 'admin'
+            return $user->role === 'admin' || $user->hasRole('admin')
                 ? redirect()->route('admin.dashboard')
                 : redirect()->route('user.dashboard');
         }

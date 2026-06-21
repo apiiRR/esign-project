@@ -813,7 +813,7 @@ class PortalController extends Controller
 
     private function canCreateDocuments(User $user): bool
     {
-        $createPermissions = ['user.letters.create', 'letters.create'];
+        $createPermissions = ['user.letters.create'];
 
         if ($user->hasAnyPermission($createPermissions)) {
             return true;

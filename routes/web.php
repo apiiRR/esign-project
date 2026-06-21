@@ -138,8 +138,9 @@ Route::prefix('admin')->name('admin.')->group(function() {
         // route resource untuk permission
         Route::resource('/permissions', App\Http\Controllers\Admin\PermissionController::class)->except(['show']);
 
-        // route resource untuk role
-        Route::resource('/roles', App\Http\Controllers\Admin\RoleController::class)->except(['show']);
+        Route::any('/roles/{any?}', fn () => redirect()->route('admin.users.index'))
+            ->where('any', '.*')
+            ->name('roles.redirect');
 
         // route resource untuk user
         Route::resource('/users', App\Http\Controllers\Admin\UserController::class)->except(['show']);

@@ -5,6 +5,10 @@ export default function hasAnyPermission(permissions) {
 
     // destructure props "auth" dari usePage
     const { auth } = usePage().props;
+
+    if (auth?.user?.role === "admin" || auth?.user?.roles?.some((role) => role.name === "admin")) {
+        return true;
+    }
     
     // Pastikan auth.permissions ada dan tidak null/undefined
     const allPermissions = auth.permissions || {};

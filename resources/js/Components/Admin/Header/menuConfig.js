@@ -1,7 +1,6 @@
 import {
     FileText,
     History,
-    KeyRound,
     LayoutDashboard,
     Shield,
     Users,
@@ -27,12 +26,6 @@ export const menuItems = [
                 href: "/admin/users",
                 icon: Users,
                 description: "User perusahaan",
-            },
-            {
-                name: "Role & Hak Akses",
-                href: "/admin/roles",
-                icon: KeyRound,
-                description: "Role admin dan user",
             },
             {
                 name: "Audit Trail",

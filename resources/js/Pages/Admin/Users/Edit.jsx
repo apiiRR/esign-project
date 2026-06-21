@@ -4,19 +4,24 @@ import { Save, Shield, UserRound } from "lucide-react";
 import { appName } from "@/Utils/appIdentity";
 
 export default function UsersEdit() {
-    const { user, roles, userRoles, settings } = usePage().props;
+    const { user, roleOptions = [], canCreateDocuments = false, settings } = usePage().props;
     const { data, setData, put, processing, errors } = useForm({
         username: user.username || "",
         name: user.name || "",
         email: user.email || "",
         password: "",
-        roles: userRoles || [],
+        role: user.role || "user",
+        can_create_documents: Boolean(canCreateDocuments),
         position: user.position || "",
         status: user.status || "active",
     });
 
-    const toggleRole = (id) => {
-        setData("roles", [id]);
+    const setRole = (role) => {
+        setData((current) => ({
+            ...current,
+            role,
+            can_create_documents: role === "user" ? current.can_create_documents : false,
+        }));
     };
 
     const handleSubmit = (e) => {
@@ -53,14 +58,29 @@ export default function UsersEdit() {
                         <div className="space-y-6">
                             <Section icon={Shield} title="Role Akses">
                                 <div className="space-y-3">
-                                    {roles.map((role) => (
+                                    {roleOptions.map((role) => (
                                         <label key={role.id} className="flex items-center rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                                            <input type="radio" name="role" checked={data.roles.includes(role.id)} onChange={() => toggleRole(role.id)} className="mr-3 border-gray-300 text-emerald-700 focus:ring-emerald-600" />
+                                            <input type="radio" name="role" checked={data.role === role.id} onChange={() => setRole(role.id)} className="mr-3 border-gray-300 text-emerald-700 focus:ring-emerald-600" />
                                             <span className="font-medium">{role.name}</span>
                                         </label>
                                     ))}
                                 </div>
-                                {errors.roles ? <p className="mt-2 text-sm text-red-600">{errors.roles}</p> : null}
+                                {data.role === "user" ? (
+                                    <label className="mt-4 flex items-start gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-gray-700">
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(data.can_create_documents)}
+                                            onChange={(event) => setData("can_create_documents", event.target.checked)}
+                                            className="mt-1 rounded border-gray-300 text-emerald-700 focus:ring-emerald-600"
+                                        />
+                                        <span>
+                                            <span className="font-medium text-gray-900">Boleh membuat dokumen</span>
+                                            <span className="block text-xs text-gray-500">Aktifkan jika user boleh melihat tombol dan form Buat Dokumen.</span>
+                                        </span>
+                                    </label>
+                                ) : null}
+                                {errors.role ? <p className="mt-2 text-sm text-red-600">{errors.role}</p> : null}
+                                {errors.can_create_documents ? <p className="mt-2 text-sm text-red-600">{errors.can_create_documents}</p> : null}
                             </Section>
 
                             <div className="flex gap-3">

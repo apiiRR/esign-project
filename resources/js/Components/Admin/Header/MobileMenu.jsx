@@ -14,6 +14,7 @@ export default function MobileMenu({
     handleDropdownItemClick, 
     setIsMobileMenuOpen 
 }) {
+    const userPosition = auth.user.position || "-";
 
     // Filter menu items
     const filteredMenuItems = getFilteredMenuItems();
@@ -127,7 +128,7 @@ export default function MobileMenu({
                             {auth.user.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                            {auth.user.email}
+                            {userPosition}
                         </p>
                     </div>
                 </div>

@@ -11,17 +11,17 @@ const cards = [
     {
         title: "Role",
         icon: GitBranch,
-        items: ["admin: akses penuh admin", "pegawai: portal pegawai", "Jabatan organisasi bukan role akses"],
+        items: ["admin: akses penuh admin", "user: portal user", "Role tambahan dapat dibuat fleksibel dari menu admin"],
     },
     {
         title: "Entity Utama",
         icon: Database,
-        items: ["users, directorates, divisions, departments", "letter_types, letters", "letter_targets, attachments, dispositions", "read receipts, notification logs", "Laravel file log melalui Log Viewer"],
+        items: ["users dan roles", "letters dan letter_signature_requests", "attachments dan document versions", "settings untuk identitas, SMTP, dan OTP", "Laravel file log melalui Log Viewer"],
     },
     {
         title: "Route Utama",
         icon: Route,
-        items: ["/login", "/admin/dashboard", "/admin/dokumentasi", "/pegawai/dashboard", "/pegawai/surat", "/pegawai/dokumentasi"],
+        items: ["/login", "/admin/dashboard", "/admin/dokumentasi", "/user/dashboard", "/user/surat"],
     },
 ];
 
@@ -103,13 +103,6 @@ export default function DeveloperDocs() {
                     </section>
 
                     <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                        <h2 className="text-base font-semibold text-gray-950">Rencana Notifikasi Web Push dan Email</h2>
-                        <p className="mt-2 text-sm leading-6 text-gray-600">
-                            Fase berikutnya disarankan memakai tabel subscription per perangkat, VAPID key, queue job, dan Laravel Notification/Mail. Push hanya berisi metadata ringkas dan link detail, sedangkan email menjadi dokumentasi pengiriman. Semua percobaan pengiriman dicatat ke notification_logs.
-                        </p>
-                    </section>
-
-                    <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                         <h2 className="text-base font-semibold text-gray-950">Setup Lokal</h2>
                         <div className="mt-4 grid gap-2">
                             {setup.map((command) => (
@@ -119,7 +112,7 @@ export default function DeveloperDocs() {
                             ))}
                         </div>
                         <p className="mt-4 text-sm text-gray-600">
-                            Akun seed default: <strong>admin/password</strong> untuk admin dan <strong>pegawai/password</strong> untuk pegawai.
+                            Akun seed default: <strong>admin/password</strong> untuk admin dan <strong>user/password</strong> untuk user.
                         </p>
                     </section>
                 </main>

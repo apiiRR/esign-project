@@ -72,5 +72,5 @@ function targetTypeLabel(type) {
 }
 function letterDisplayNumber(letter) {
     if (!letter) return "-";
-    return letter.type === "incoming_external" ? (letter.letter_number || "-") : (letter.letter_number || letter.reference || "-");
+    return letter.letter_number || "-";
 }

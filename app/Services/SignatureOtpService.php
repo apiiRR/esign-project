@@ -7,6 +7,7 @@ use App\Models\LetterSignatureRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class SignatureOtpService
 {
@@ -54,7 +55,7 @@ class SignatureOtpService
             ->whereNull('consumed_at')
             ->update(['consumed_at' => now()]);
 
-        LetterSignatureOtp::query()->create([
+        $otp = LetterSignatureOtp::query()->create([
             'letter_signature_request_id' => $signatureRequest->id,
             'user_id' => $user->id,
             'otp_hash' => Hash::make($code),
@@ -63,16 +64,21 @@ class SignatureOtpService
         ]);
 
         $letter = $signatureRequest->letter;
-        $number = $letter ? ($letter->letter_number ?: $letter->reference) : '-';
+        $number = $letter ? ($letter->letter_number ?: 'dokumen') : '-';
 
         $approvalLabel = $signatureRequest->approval_type === 'paraf' ? 'paraf dokumen' : 'tanda tangan dokumen';
 
-        $this->mailSettings->sendRaw(
-            $user,
-            'Kode OTP approval dokumen',
-            "Kode OTP Anda: {$code}\n\nKode ini berlaku " . self::EXPIRES_MINUTES . " menit untuk approve atau reject {$approvalLabel} {$number}.",
-            true
-        );
+        try {
+            $this->mailSettings->sendRaw(
+                $user,
+                'Kode OTP approval dokumen',
+                "Kode OTP Anda: {$code}\n\nKode ini berlaku " . self::EXPIRES_MINUTES . " menit untuk {$approvalLabel} {$number}.",
+                true
+            );
+        } catch (Throwable $exception) {
+            $otp->update(['consumed_at' => now()]);
+            throw $exception;
+        }
     }
 
     public function validateAndConsume(LetterSignatureRequest $signatureRequest, User $user, ?string $code): void

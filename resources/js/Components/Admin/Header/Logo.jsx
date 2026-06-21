@@ -13,7 +13,7 @@ export default function Logo() {
                 <div className="relative">
                     <div className="bg-white rounded-xl border border-gray-200 p-1 shadow-sm">
                         <div className="relative">
-                            <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-blue-100 rounded-lg"></div>
+                            <div className="absolute inset-0 bg-gradient-to-br from-cyan-50 to-fuchsia-100 rounded-lg"></div>
                             <div className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg">
                                 <ApplicationLogo className="h-10 w-10" iconClassName="h-6 w-6" />
                             </div>

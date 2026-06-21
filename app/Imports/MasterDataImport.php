@@ -132,8 +132,10 @@ class MasterDataImport implements ToCollection, WithHeadingRow
     {
         $this->require($data, ['username', 'name', 'role', 'status']);
         $this->assertStatus($data['status']);
-        if (! in_array($data['role'], ['admin', 'pegawai'], true)) {
-            throw ValidationException::withMessages(['role' => 'Role harus admin atau pegawai.']);
+        $role = Role::query()->where('name', $data['role'])->first();
+
+        if (! $role) {
+            throw ValidationException::withMessages(['role' => 'Role tidak ditemukan di master role.']);
         }
 
         $user = User::query()->where('username', $data['username'])->first();
@@ -177,7 +179,6 @@ class MasterDataImport implements ToCollection, WithHeadingRow
 
         $user->fill($payload)->save();
 
-        $role = Role::query()->firstOrCreate(['name' => $data['role'], 'guard_name' => 'web']);
         $user->syncRoles([$role->id]);
         $this->syncOrganizationOfficer($user);
 

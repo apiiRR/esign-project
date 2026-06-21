@@ -14,9 +14,11 @@ use App\Models\LetterTarget;
 use App\Models\LetterType;
 use App\Models\User;
 use App\Services\DispositionService;
+use App\Services\AuditTrailService;
+use App\Services\DocumentDownloadOtpService;
+use App\Services\DocumentWatermarkService;
 use App\Services\LetterFieldRequirementService;
 use App\Services\LetterSignatureService;
-use App\Services\NotificationDeliveryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -29,25 +31,17 @@ class LetterController extends Controller
 {
     public function index(Request $request, string $type = 'internal')
     {
-        $isArchive = $type === 'arsip' || $type === 'archive';
-        $mappedType = $this->mapType($type);
+        $mappedType = 'internal';
 
         $letters = Letter::query()
             ->with(['creator:id,name,username', 'letterType:id,name'])
-            ->when($isArchive, fn ($query) => $query->where(function ($archive) {
-                $archive->where('status', 'archived')
-                    ->orWhere('type', 'archive')
-                    ->orWhere('meta->mode', 'archive');
-            }))
-            ->when(! $isArchive, fn ($query) => $query->where('type', $mappedType))
+            ->where('type', $mappedType)
             ->when($request->q, fn ($query, $search) => $query->where(fn ($q) => $q
                 ->where('title', 'like', "%{$search}%")
                 ->orWhere('subject', 'like', "%{$search}%")
                 ->orWhere('letter_number', 'like', "%{$search}%")
                 ->orWhere('reference', 'like', "%{$search}%")
             ))
-            ->when($request->filled('letter_type_ids'), fn ($query) => $query->whereIn('letter_type_id', (array) $request->letter_type_ids))
-            ->when($request->filled('statuses'), fn ($query) => $query->whereIn('status', (array) $request->statuses))
             ->when($request->filled('creator_ids'), fn ($query) => $query->whereIn('created_by', (array) $request->creator_ids))
             ->latest()
             ->paginate(10)
@@ -55,26 +49,22 @@ class LetterController extends Controller
 
         return inertia('Admin/Letters/Index', [
             'letters' => $letters,
-            'type' => $isArchive ? 'archive' : $mappedType,
-            'typeLabel' => $isArchive ? 'Arsip Surat' : $this->typeLabel($mappedType),
+            'type' => $mappedType,
+            'typeLabel' => $this->typeLabel($mappedType),
             'filterOptions' => [
                 'letterTypes' => LetterType::query()->where('status', 'active')->orderBy('name')->get(['id', 'name']),
                 'creators' => User::query()->whereNotNull('id')->orderBy('name')->get(['id', 'name']),
-                'statuses' => collect(['draft', 'sent', 'received', 'disposed', 'archived', 'rejected'])
-                    ->map(fn ($status) => ['id' => $status, 'name' => ucfirst($status)])
-                    ->values(),
             ],
         ]);
     }
 
     public function create(string $mode)
     {
-        $isArchive = $mode === 'arsip' || $mode === 'archive';
-        $type = $this->mapType($mode);
+        $type = 'internal';
 
         return inertia('Admin/Letters/Form', [
             'type' => $type,
-            'isArchive' => $isArchive,
+            'isArchive' => false,
             'letterTypes' => LetterType::query()
                 ->where('status', 'active')
                 ->orderBy('name')
@@ -85,60 +75,48 @@ class LetterController extends Controller
 
     public function store(Request $request)
     {
-        $type = $request->input('type');
-        $isArchive = $request->boolean('is_archive');
-        $isInternal = $type === 'internal';
-        $isOutgoing = $type === 'outgoing';
-        $context = $isArchive ? 'archive' : $type;
+        $context = 'internal';
         $requirements = app(LetterFieldRequirementService::class);
-
-        $targetRules = 'required|in:directorate,division,department,division_gm,department_manager';
+        $isSending = $request->input('submit_action') === 'send';
 
         try {
             $validated = $request->validate([
-                'type' => 'required|in:incoming_external,outgoing,internal',
+                'type' => 'required|in:internal',
                 'is_archive' => 'nullable|boolean',
-                'submit_action' => $isInternal || $isOutgoing ? 'required|in:draft,send' : 'nullable',
-                'letter_type_id' => 'required|exists:letter_types,id',
-                'letter_number' => ($type === 'incoming_external' && ! $isArchive ? 'required' : ($requirements->required($context, 'letter_number') ? 'required' : 'nullable')) . '|string|max:255|unique:letters,letter_number',
+                'submit_action' => 'required|in:draft,send',
+                'signature_flow' => 'nullable|in:sequential,parallel',
+                'letter_type_id' => 'nullable|exists:letter_types,id',
+                'letter_number' => ($requirements->required($context, 'letter_number') ? 'required' : 'nullable') . '|string|max:255|unique:letters,letter_number',
                 'subject' => 'required|string|max:255',
                 'title' => 'nullable|string|max:255',
                 'scan_file' => 'bail|' . (($requirements->required($context, 'scan_file') ? 'required' : 'nullable') . '|file|mimes:pdf'),
-                'targets' => $isInternal ? 'required|array|min:1' : 'nullable|array',
-                'targets.*.target_type' => $isInternal ? $targetRules : 'nullable',
-                'targets.*.target_id' => $isInternal ? 'required|integer' : 'nullable',
-                'cc_targets' => $isInternal || $isOutgoing ? 'nullable|array' : 'nullable|array',
-                'cc_targets.*.target_type' => $isInternal || $isOutgoing ? $targetRules : 'nullable',
-                'cc_targets.*.target_id' => $isInternal || $isOutgoing ? 'required|integer' : 'nullable',
                 'payload' => 'nullable|array',
-                'payload.origin_name' => $type === 'incoming_external' && ! $isArchive ? 'required|string|max:255' : 'nullable|string|max:255',
-                'payload.internal_origin_type' => $isInternal || $isOutgoing ? 'required|in:directorate,division,department' : 'nullable',
-                'payload.internal_origin_id' => $isInternal || $isOutgoing ? 'required|integer' : 'nullable',
-                'payload.external_recipient' => $isOutgoing ? 'required|string|max:255' : 'nullable|string|max:255',
-                'payload.notes' => in_array($type, ['incoming_external'], true) ? 'nullable|string' : 'nullable',
-                'signature_requests' => $isInternal ? 'nullable|array' : 'prohibited',
-                'signature_requests.*.approval_type' => $isInternal ? 'required|in:paraf,signature' : 'prohibited',
-                'signature_requests.*.signer_user_id' => $isInternal ? 'required|exists:users,id,status,active,role,pegawai' : 'prohibited',
-                'signature_requests.*.signing_order' => $isInternal ? 'required|integer|min:1|distinct' : 'prohibited',
-                'signature_requests.*.page_number' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|integer|min:1' : 'prohibited',
-                'signature_requests.*.x' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
-                'signature_requests.*.y' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
-                'signature_requests.*.width' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
-                'signature_requests.*.height' => $isInternal ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'prohibited',
+                'payload.notes' => 'nullable',
+                'signature_requests' => $isSending ? 'required|array|min:1' : 'nullable|array',
+                'signature_requests.*.signer_user_id' => $isSending ? 'required|exists:users,id,status,active' : 'nullable|exists:users,id,status,active',
+                'signature_requests.*.signing_order' => $isSending ? 'required|integer|min:1|distinct' : 'nullable|integer|min:1|distinct',
+                'signature_requests.*.page_number' => $isSending ? 'required|integer|min:1' : 'nullable|integer|min:1',
+                'signature_requests.*.x' => $isSending ? 'required|numeric|between:0,1' : 'nullable|numeric|between:0,1',
+                'signature_requests.*.y' => $isSending ? 'required|numeric|between:0,1' : 'nullable|numeric|between:0,1',
+                'signature_requests.*.width' => $isSending ? 'required|numeric|between:0,1' : 'nullable|numeric|between:0,1',
+                'signature_requests.*.height' => $isSending ? 'required|numeric|between:0,1' : 'nullable|numeric|between:0,1',
             ], $this->uploadValidationMessages());
-            $this->validateApprovalSequence($validated['signature_requests'] ?? []);
+            if ($isSending) {
+                $this->validateApprovalSequence($validated['signature_requests'] ?? []);
+            }
         } catch (ValidationException $exception) {
             $this->logUploadValidationFailure($request, $exception);
             throw $exception;
         }
 
-        $letter = DB::transaction(function () use ($request, $validated, $isInternal, $isOutgoing) {
+        $letter = DB::transaction(function () use ($request, $validated) {
             $user = $request->user();
             $letterNumber = $validated['letter_number'] ?? null;
+            $signatureFlow = $validated['signature_flow'] ?? 'sequential';
 
             $letter = Letter::create([
                 'type' => $validated['type'],
-                'letter_type_id' => $validated['letter_type_id'],
+                'letter_type_id' => $validated['letter_type_id'] ?? null,
                 'created_by' => $user->id,
                 'origin_directorate_id' => $user->directorate_id,
                 'origin_division_id' => $user->division_id,
@@ -149,47 +127,38 @@ class LetterController extends Controller
                 'reference' => Str::uuid()->toString(),
                 'page_count' => 1,
                 'status' => match (true) {
-                    $isInternal || $isOutgoing => ($validated['submit_action'] === 'draft' ? 'draft' : 'sent'),
-                    default => ($validated['is_archive'] ?? false) ? 'archived' : 'received',
+                    default => ($validated['submit_action'] === 'draft' ? 'draft' : 'sent'),
                 },
                 'payload' => $validated['payload'] ?? [],
-                'meta' => ['source' => 'admin'],
+                'meta' => [
+                    'source' => 'admin',
+                    'signature_flow' => $signatureFlow,
+                ],
             ]);
 
-            if ($isInternal) {
-                foreach ($validated['targets'] as $target) {
-                    $letter->targets()->create($target + ['kind' => 'recipient']);
+            foreach ($validated['signature_requests'] ?? [] as $signatureRequest) {
+                if (! $this->isCompleteSignatureRequest($signatureRequest)) {
+                    continue;
                 }
 
-            }
-
-            if ($isInternal || $isOutgoing) {
-                foreach ($validated['cc_targets'] ?? [] as $target) {
-                    $letter->targets()->create($target + ['kind' => 'cc']);
-                }
-            }
-
-            if ($isInternal) {
-                foreach ($validated['signature_requests'] ?? [] as $signatureRequest) {
-                    $letter->signatureRequests()->create([
-                        'requested_by' => $user->id,
-                        'signer_user_id' => (int) $signatureRequest['signer_user_id'],
-                        'approval_type' => $signatureRequest['approval_type'] ?? 'signature',
-                        'signing_order' => (int) $signatureRequest['signing_order'],
-                        'page_number' => (int) ($signatureRequest['page_number'] ?? 1),
-                        'x' => (float) ($signatureRequest['x'] ?? 0),
-                        'y' => (float) ($signatureRequest['y'] ?? 0),
-                        'width' => (float) ($signatureRequest['width'] ?? 0.18),
-                        'height' => (float) ($signatureRequest['height'] ?? 0.08),
-                        'status' => 'pending',
-                    ]);
-                }
+                $letter->signatureRequests()->create([
+                    'requested_by' => $user->id,
+                    'signer_user_id' => (int) $signatureRequest['signer_user_id'],
+                    'approval_type' => 'signature',
+                    'signing_order' => (int) $signatureRequest['signing_order'],
+                    'page_number' => (int) ($signatureRequest['page_number'] ?? 1),
+                    'x' => (float) ($signatureRequest['x'] ?? 0),
+                    'y' => (float) ($signatureRequest['y'] ?? 0),
+                    'width' => (float) ($signatureRequest['width'] ?? 0.18),
+                    'height' => (float) ($signatureRequest['height'] ?? 0.08),
+                    'status' => 'pending',
+                ]);
             }
 
             $attachment = null;
             if ($request->hasFile('scan_file')) {
                 $file = $request->file('scan_file');
-                $path = $file->store("letters/{$letter->reference}", 'public');
+                $path = $file->store("letters/letter-{$letter->id}", 'public');
                 $attachment = LetterAttachment::create([
                     'letter_id' => $letter->id,
                     'file_name' => $file->getClientOriginalName(),
@@ -199,7 +168,7 @@ class LetterController extends Controller
                 ]);
             }
 
-            if ($isInternal && $letter->signatureRequests()->exists()) {
+            if ($letter->status === 'sent' && $letter->signatureRequests()->exists()) {
                 $signatureService = app(LetterSignatureService::class);
                 if ($attachment) {
                     $signatureService->createInitialVersion($letter, $attachment, $user);
@@ -207,33 +176,18 @@ class LetterController extends Controller
                 $signatureService->initializeRequests($letter->fresh(['attachments', 'currentVersion']));
             }
 
-            if (($isInternal || $isOutgoing) && $letter->status === 'sent' && ! ($isInternal && $letter->signatureRequests()->exists())) {
-                $recipientUserIds = $this->resolveTargetUsers(collect($validated['targets'] ?? []))
-                    ->reject(fn ($id) => (int) $id === (int) $user->id)
-                    ->unique()
-                    ->values();
-
-                foreach ($recipientUserIds as $userId) {
-                    app(NotificationDeliveryService::class)->letter($userId, $letter, 'Surat internal baru', $letter->subject);
-                }
-
-                $ccUserIds = $this->resolveTargetUsers(collect($validated['cc_targets'] ?? []))
-                    ->reject(fn ($id) => (int) $id === (int) $user->id)
-                    ->unique()
-                    ->values();
-
-                foreach ($ccUserIds as $userId) {
-                    app(NotificationDeliveryService::class)->letterCc($userId, $letter, 'Tembusan surat baru', $letter->subject);
-                }
-            }
-
             return $letter;
         });
 
-        return redirect()->route('admin.surat.show', $letter)->with('success', 'Surat berhasil dibuat.');
+        app(AuditTrailService::class)->log($request, $request->user(), 'dokumen', 'created', 'Membuat dokumen.', $letter, [
+            'status' => $letter->status,
+            'signature_flow' => data_get($letter->meta, 'signature_flow'),
+        ]);
+
+        return redirect()->route('admin.surat.show', $letter)->with('success', 'Dokumen berhasil dibuat.');
     }
 
-    public function show(Letter $letter, DispositionService $dispositionService)
+    public function show(Request $request, Letter $letter, DispositionService $dispositionService, AuditTrailService $auditTrail)
     {
         $letter->load([
             'creator:id,name,username',
@@ -254,9 +208,14 @@ class LetterController extends Controller
             'readReceipts' => fn ($query) => $query->where('user_id', '!=', $letter->created_by),
             'readReceipts.user:id,name,username,position',
         ]);
+        $auditTrail->log($request, $request->user(), 'dokumen', 'viewed', 'Membuka detail dokumen.', $letter);
+        $previewPath = $this->previewPdfPath($letter);
 
         return inertia('Admin/Letters/Show', [
             'letter' => $letter,
+            'hasPreview' => (bool) $previewPath,
+            'previewUrl' => $previewPath ? $this->previewUrl($letter) : null,
+            'downloadOtpRequired' => app(DocumentDownloadOtpService::class)->requiredFor(auth()->user()),
             'targetOptions' => $this->targetOptions(),
             'dispositionTargetOptions' => $dispositionService->optionsFor(auth()->user(), true, $letter),
         ]);
@@ -265,13 +224,67 @@ class LetterController extends Controller
     public function update(Request $request, Letter $letter)
     {
         $validated = $request->validate([
-            'status' => 'required|in:draft,sent,received,disposed,archived,rejected',
             'letter_number' => 'nullable|string|max:255|unique:letters,letter_number,' . $letter->id,
         ]);
 
         $letter->update($validated);
+        app(AuditTrailService::class)->log($request, $request->user(), 'dokumen', 'updated', 'Mengubah data dokumen.', $letter, [
+            'letter_number' => $letter->letter_number,
+        ]);
 
-        return back()->with('success', 'Status surat berhasil diperbarui.');
+        return back()->with('success', 'Nomor dokumen berhasil diperbarui.');
+    }
+
+    public function preview(Letter $letter)
+    {
+        $letter->loadMissing(['currentVersion', 'attachments']);
+        $path = $this->previewPdfPath($letter);
+
+        abort_unless($path && Storage::disk('public')->exists($path), 404);
+
+        return response()->file(Storage::disk('public')->path($path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . ($letter->letter_number ?: 'dokumen') . '.pdf"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
+
+    public function sendDownloadOtp(Request $request, Letter $letter, DocumentDownloadOtpService $otpService, AuditTrailService $auditTrail)
+    {
+        $letter->loadMissing(['currentVersion', 'attachments']);
+        abort_unless($this->previewPdfPath($letter), 404);
+
+        if (! $otpService->requiredFor(auth()->user())) {
+            return response()->json(['message' => 'OTP tidak diperlukan untuk download dokumen.']);
+        }
+
+        $otpService->send($letter, auth()->user());
+        $auditTrail->log($request, $request->user(), 'dokumen', 'download_otp_sent', 'Mengirim OTP download dokumen.', $letter);
+
+        return response()->json(['message' => 'Kode OTP download dokumen berhasil dikirim ke email Anda.']);
+    }
+
+    public function download(Request $request, Letter $letter, DocumentDownloadOtpService $otpService, DocumentWatermarkService $watermarkService, AuditTrailService $auditTrail)
+    {
+        $letter->loadMissing(['currentVersion', 'attachments']);
+        $path = $this->previewPdfPath($letter);
+
+        abort_unless($path && Storage::disk('public')->exists($path), 404);
+
+        $otpService->validateAndConsume($letter, $request->user(), $request->input('otp_code'));
+        $watermarkedPath = $watermarkService->make(Storage::disk('public')->path($path), $letter, $request->user());
+        $auditTrail->log($request, $request->user(), 'dokumen', 'downloaded', 'Download dokumen dengan watermark.', $letter, [
+            'document_id' => $letter->id,
+            'document_number' => $letter->letter_number ?: '-',
+            'watermarked' => true,
+        ]);
+
+        return response()->download(
+            $watermarkedPath,
+            $this->downloadFileName($letter)
+        )->deleteFileAfterSend(true);
     }
 
     public function reviseInternalPdf(Request $request, Letter $letter, LetterSignatureService $signatureService)
@@ -284,14 +297,13 @@ class LetterController extends Controller
                 'revision_flow' => 'required|in:reuse,reset',
                 'scan_file' => 'bail|required|file|mimes:pdf',
                 'signature_requests' => $reset ? 'required|array|min:1' : 'nullable|array',
-                'signature_requests.*.approval_type' => $reset ? 'required|in:paraf,signature' : 'nullable',
-                'signature_requests.*.signer_user_id' => $reset ? 'required|exists:users,id,status,active,role,pegawai' : 'nullable',
+                'signature_requests.*.signer_user_id' => $reset ? 'required|exists:users,id,status,active' : 'nullable',
                 'signature_requests.*.signing_order' => $reset ? 'required|integer|min:1|distinct' : 'nullable',
-                'signature_requests.*.page_number' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|integer|min:1' : 'nullable',
-                'signature_requests.*.x' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
-                'signature_requests.*.y' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
-                'signature_requests.*.width' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
-                'signature_requests.*.height' => $reset ? 'required_if:signature_requests.*.approval_type,signature|nullable|numeric|between:0,1' : 'nullable',
+                'signature_requests.*.page_number' => $reset ? 'required|integer|min:1' : 'nullable',
+                'signature_requests.*.x' => $reset ? 'required|numeric|between:0,1' : 'nullable',
+                'signature_requests.*.y' => $reset ? 'required|numeric|between:0,1' : 'nullable',
+                'signature_requests.*.width' => $reset ? 'required|numeric|between:0,1' : 'nullable',
+                'signature_requests.*.height' => $reset ? 'required|numeric|between:0,1' : 'nullable',
             ], $this->uploadValidationMessages());
 
             if ($reset) {
@@ -304,7 +316,7 @@ class LetterController extends Controller
 
         $version = DB::transaction(function () use ($request, $letter, $signatureService, $validated, $flow) {
             $file = $request->file('scan_file');
-            $path = $file->store("letters/{$letter->reference}/revisi", 'public');
+            $path = $file->store("letters/letter-{$letter->id}/revisi", 'public');
 
             $attachment = LetterAttachment::query()->create([
                 'letter_id' => $letter->id,
@@ -339,7 +351,7 @@ class LetterController extends Controller
             $letter->delete();
         });
 
-        return redirect()->route('admin.surat.internal')->with('success', 'Draft surat berhasil dihapus.');
+        return redirect()->route('admin.surat.internal')->with('success', 'Draft dokumen berhasil dihapus.');
     }
 
     private function mapType(string $type): string
@@ -355,9 +367,7 @@ class LetterController extends Controller
     private function typeLabel(string $type): string
     {
         return match ($type) {
-            'incoming_external' => 'Surat Masuk Eksternal',
-            'outgoing' => 'Surat Keluar',
-            default => 'Surat Internal',
+            default => 'Dokumen',
         };
     }
 
@@ -417,11 +427,20 @@ class LetterController extends Controller
         ];
     }
 
+    private function isCompleteSignatureRequest(array $request): bool
+    {
+        foreach (['signer_user_id', 'signing_order', 'page_number', 'x', 'y', 'width', 'height'] as $field) {
+            if (! array_key_exists($field, $request) || $request[$field] === null || $request[$field] === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function validateApprovalSequence(array $requests): void
     {
         $sorted = collect($requests)->sortBy('signing_order')->values();
-        $signatureStarted = false;
-
         foreach ($sorted as $request) {
             $type = $request['approval_type'] ?? 'signature';
 
@@ -433,15 +452,6 @@ class LetterController extends Controller
                         ]);
                     }
                 }
-
-                $signatureStarted = true;
-                continue;
-            }
-
-            if ($signatureStarted && $type === 'paraf') {
-                throw ValidationException::withMessages([
-                    'signature_requests' => 'Urutan paraf harus berada sebelum tanda tangan.',
-                ]);
             }
         }
     }
@@ -466,5 +476,49 @@ class LetterController extends Controller
             'file_error' => $file && method_exists($file, 'getError') ? $file->getError() : null,
             'errors' => $exception->errors()['scan_file'],
         ]);
+    }
+
+    private function previewPdfPath(Letter $letter): ?string
+    {
+        $candidates = collect([
+            $letter->currentVersion?->signed_pdf_path,
+            $letter->signed_pdf_path,
+            $letter->currentVersion?->source_pdf_path,
+        ])->filter();
+
+        foreach ($candidates as $path) {
+            if (Storage::disk('public')->exists($path)) {
+                return $path;
+            }
+        }
+
+        $pdfAttachment = $letter->attachments
+            ->first(function (LetterAttachment $attachment) {
+                $mimeType = strtolower((string) $attachment->mime_type);
+                $path = strtolower((string) $attachment->file_path);
+
+                return (str_contains($mimeType, 'pdf') || str_ends_with($path, '.pdf'))
+                    && Storage::disk('public')->exists($attachment->file_path);
+            });
+
+        return $pdfAttachment?->file_path;
+    }
+
+    private function previewUrl(Letter $letter): ?string
+    {
+        $version = $letter->updated_at?->timestamp ?: time();
+
+        if ($letter->currentVersion?->updated_at && $letter->currentVersion->updated_at->timestamp > $version) {
+            $version = $letter->currentVersion->updated_at->timestamp;
+        }
+
+        return route('admin.surat.preview', $letter, false) . '?v=' . $version;
+    }
+
+    private function downloadFileName(Letter $letter): string
+    {
+        $name = Str::slug($letter->letter_number ?: $letter->subject ?: 'dokumen');
+
+        return ($name ?: 'dokumen') . '.pdf';
     }
 }

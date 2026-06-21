@@ -1,20 +1,19 @@
 import { Head, Link, router, useForm, usePage } from "@inertiajs/react";
 import { useEffect, useState } from "react";
-import LayoutPegawai from "@/Layouts/LayoutPegawai";
+import LayoutUser from "@/Layouts/LayoutUser";
 import Search from "@/Shared/Search";
 import FormErrorSummary from "@/Shared/FormErrorSummary";
 import PdfSignaturePlacement from "@/Components/PdfSignaturePlacement";
+import PdfDocumentViewer from "@/Components/PdfDocumentViewer";
+import DocumentDownloadButton from "@/Components/DocumentDownloadButton";
 import {
     Archive,
-    Bell,
     CheckCheck,
     Clock,
-    Download,
     Eye,
     FilePlus2,
     Inbox,
     Mail,
-    Paperclip,
     Plus,
     Send,
     Trash2,
@@ -24,14 +23,14 @@ import {
 function Header({ title, description, actionHref, actionText }) {
     return (
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-950">{title}</h1>
-                <p className="mt-2 text-sm text-gray-600">{description}</p>
+            <div className="min-w-0">
+                <h1 className="break-words text-xl font-bold text-gray-950 sm:text-2xl">{title}</h1>
+                <p className="mt-2 break-words text-sm text-gray-600">{description}</p>
             </div>
             {actionHref ? (
                 <Link
                     href={actionHref}
-                    className="inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
+                    className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 sm:w-auto"
                 >
                     <FilePlus2 className="mr-2 h-4 w-4" />
                     {actionText}
@@ -96,10 +95,28 @@ function collection(value) {
           : [];
 }
 
+function locationHeaders() {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve({});
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => resolve({
+                "X-Client-Latitude": String(position.coords.latitude),
+                "X-Client-Longitude": String(position.coords.longitude),
+            }),
+            () => resolve({}),
+            { enableHighAccuracy: false, maximumAge: 300000, timeout: 2500 },
+        );
+    });
+}
+
 function letterDisplayNumber(letter) {
     if (!letter) return "-";
     if (letter.type === "incoming_external") return letter.letter_number || "-";
-    return letter.letter_number || letter.reference || "-";
+    return letter.letter_number || "-";
 }
 
 function letterTypeMeta(letterOrType) {
@@ -110,10 +127,7 @@ function letterTypeMeta(letterOrType) {
               ? "archive"
               : letterOrType?.type;
     const types = {
-        incoming_external: { label: "Surat Masuk Eksternal", tone: "amber" },
-        internal: { label: "Surat Internal", tone: "blue" },
-        outgoing: { label: "Surat Keluar", tone: "green" },
-        archive: { label: "Arsip", tone: "gray" },
+        internal: { label: "Dokumen", tone: "blue" },
     };
 
     return types[type] || { label: "Surat", tone: "gray" };
@@ -125,18 +139,13 @@ function signatureStatusMeta(status) {
         pending: { label: "Menunggu giliran", tone: "gray" },
         in_progress: { label: "Proses approval", tone: "amber" },
         signed: { label: "Disetujui", tone: "green" },
-        rejected: { label: "Ditolak", tone: "red" },
     };
 
     return statuses[status] || { label: status || "-", tone: "gray" };
 }
 
 function approvalTypeMeta(request) {
-    const type = request?.approval_type === "paraf" ? "paraf" : "signature";
-
-    return type === "paraf"
-        ? { label: "Paraf", action: "Setujui Paraf", ready: "Paraf", doneTitle: "Sudah Diparaf", doneMessage: "Paraf dokumen sudah disetujui di sistem.", waiting: "Menunggu giliran paraf." }
-        : { label: "Tanda Tangan", action: "Setujui dan Tempel QR", ready: "TTD", doneTitle: "Sudah Ditandatangani", doneMessage: "Tanda tangan QR sudah disetujui dan ditempel ke PDF signed.", waiting: "Menunggu giliran tanda tangan." };
+    return { label: "Tanda Tangan", action: "Setujui dan Tempel QR", ready: "TTD", doneTitle: "Sudah Ditandatangani", doneMessage: "Tanda tangan QR sudah disetujui dan ditempel ke PDF signed.", waiting: "Menunggu giliran tanda tangan." };
 }
 
 function signatureActionLabel(status) {
@@ -144,13 +153,10 @@ function signatureActionLabel(status) {
         ready: "Tanda tangani",
         pending: "Lihat status",
         signed: "Lihat dokumen",
-        rejected: "Lihat catatan",
     }[status] || "Lihat";
 }
 
 function approvalActionLabel(request) {
-    if (request?.status === "ready" && request?.approval_type === "paraf") return "Paraf";
-
     return signatureActionLabel(request?.status);
 }
 
@@ -159,72 +165,21 @@ function businessLetterType(letter) {
 }
 
 function Dashboard() {
-    const { stats = {}, letters = [] } = usePage().props;
-    const cards = [
-        {
-            label: "Inbox Internal",
-            value: stats.internal_unread || 0,
-            icon: Mail,
-            href: "/pegawai/inbox/internal",
-            tone: "red",
-        },
-        {
-            label: "Inbox Tebusan",
-            value: stats.cc_unread || 0,
-            icon: Send,
-            href: "/pegawai/inbox/tebusan",
-            tone: "blue",
-        },
-        {
-            label: "Disposisi Belum Dibaca",
-            value: stats.unread_dispositions || 0,
-            icon: Inbox,
-            href: "/pegawai/disposisi",
-            tone: "amber",
-        },
-        {
-            label: "Arsip Saya",
-            value: stats.archive_total || 0,
-            icon: Archive,
-            href: "/pegawai/arsip",
-            tone: "green",
-        },
-    ];
+    const { letters = [], canCreateDocuments } = usePage().props;
 
     return (
         <>
             <Header
-                title="Dashboard Pegawai"
-                description="Ringkasan surat internal, tebusan, disposisi, dan arsip pribadi dari database aplikasi."
+                title="Dashboard User"
+                description="Surat terbaru dari database aplikasi."
+                actionHref={canCreateDocuments ? "/user/surat/create" : null}
+                actionText="Buat Dokumen"
             />
-            <div className="grid gap-4 md:grid-cols-4">
-                {cards.map(({ label, value, icon: Icon, href, tone }) => (
-                    <Link
-                        key={label}
-                        href={href}
-                        className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:border-emerald-300"
-                    >
-                        <div className="flex items-center justify-between">
-                            <Icon className="h-5 w-5 text-emerald-700" />
-                            <Pill tone={tone}>{value}</Pill>
-                        </div>
-                        <div className="mt-4 text-sm font-semibold text-gray-950">
-                            {label}
-                        </div>
-                    </Link>
-                ))}
-            </div>
-            <div className="mt-6">
+            <div>
                 <div className="mb-3 flex items-center justify-between">
                     <h2 className="text-lg font-semibold text-gray-950">
                         Surat Terbaru
                     </h2>
-                    <Link
-                        href="/pegawai/inbox/internal"
-                        className="text-sm font-semibold text-emerald-700 hover:text-emerald-800"
-                    >
-                        Lihat inbox
-                    </Link>
                 </div>
                 <LetterList
                     letters={letters}
@@ -245,45 +200,43 @@ function LetterList({ letters, emptyText = "Tidak ada data surat.", context = "d
     return (
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="hidden grid-cols-12 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-semibold uppercase text-gray-600 md:grid">
-                <div className="col-span-6">Surat</div>
-                <div className="col-span-2">Pengirim</div>
-                <div className="col-span-2">Status</div>
+                <div className="col-span-7">Surat</div>
+                <div className="col-span-3">Pengirim</div>
                 <div className="col-span-2 text-right">Aksi</div>
             </div>
             <div className="divide-y divide-gray-100">
                 {rows.length ? (
                     rows.map((letter) => {
-                        const unread = letter.is_dashboard_item && letter.source === "disposisi"
-                            ? !letter.read_at
-                            : !letter.read_receipts?.length;
                         const summaryOnly = Boolean(letter.summary_only);
                         const isCreator = String(letter.created_by) === String(auth?.user?.id);
-                        const actionUrl = letter.action_url || `/pegawai/surat/${letter.letter_id || letter.id}`;
+                        const actionUrl = letter.action_url || `/user/surat/${letter.letter_id || letter.id}`;
                         const sourceMeta = {
+                            created: { label: "Buat Surat", tone: "blue" },
+                            signature: { label: "Surat Masuk", tone: "amber" },
                             internal: { label: "Inbox Internal", tone: "blue" },
                             tebusan: { label: "Tebusan", tone: "green" },
                             disposisi: { label: "Disposisi", tone: "amber" },
-                        }[letter.source] || null;
+                        }[letter.dashboard_badge || letter.source] || null;
+                        const signatureMeta = {
+                            ready: { label: "Butuh Tanda Tangan", tone: "amber" },
+                            pending: { label: "Menunggu Giliran", tone: "gray" },
+                            signed: { label: "Sudah Ditandatangani", tone: "green" },
+                        }[letter.signature_request_status] || null;
                         return (
                             <div
                                 key={letter.id}
-                                className="grid gap-3 px-5 py-4 text-sm md:grid-cols-12 md:items-center"
+                                className="grid gap-3 px-4 py-4 text-sm sm:px-5 md:grid-cols-12 md:items-center"
                             >
-                                <div className="min-w-0 md:col-span-6">
-                                    <div className="flex items-center gap-2">
-                                        {!isArchive && unread ? (
-                                            <span className="h-2 w-2 rounded-full bg-red-600" />
-                                        ) : !isArchive ? (
-                                            <CheckCheck className="h-4 w-4 text-emerald-600" />
-                                        ) : null}
+                                <div className="min-w-0 md:col-span-7">
+                                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                                         {summaryOnly ? (
-                                            <span className="truncate font-semibold text-gray-950">
+                                            <span className="min-w-0 break-words font-semibold text-gray-950">
                                                 {letterDisplayNumber(letter)}
                                             </span>
                                         ) : (
                                             <Link
                                                 href={actionUrl}
-                                                className="truncate font-semibold text-gray-950 hover:text-emerald-700"
+                                                className="min-w-0 break-words font-semibold text-gray-950 hover:text-emerald-700"
                                             >
                                                 {letter.subject || letter.title || letterDisplayNumber(letter)}
                                             </Link>
@@ -291,6 +244,12 @@ function LetterList({ letters, emptyText = "Tidak ada data surat.", context = "d
                                         <Pill tone={letterTypeMeta(letter).tone}>
                                             {letterTypeMeta(letter).label}
                                         </Pill>
+                                        {letter.status === "draft" ? <Pill tone="amber">Draft</Pill> : null}
+                                        {isDashboard && letter.dashboard_badge === "signature" && signatureMeta ? (
+                                            <Pill tone={signatureMeta.tone}>{signatureMeta.label}</Pill>
+                                        ) : isDashboard && sourceMeta ? (
+                                            <Pill tone={sourceMeta.tone}>{sourceMeta.label}</Pill>
+                                        ) : null}
                                     </div>
                                     <div className="mt-1 text-xs text-gray-500">
                                         {letterDisplayNumber(letter)} ·{" "}
@@ -301,19 +260,8 @@ function LetterList({ letters, emptyText = "Tidak ada data surat.", context = "d
                                               : `${formatDate(letter.created_at)} · ${letter.page_count || 1} halaman`}
                                     </div>
                                 </div>
-                                <div className="text-gray-700 md:col-span-2">
+                                <div className="text-gray-700 md:col-span-3">
                                     {summaryOnly ? "-" : (letter.sender || letter.creator?.name || "-")}
-                                </div>
-                                <div className="md:col-span-2">
-                                    {isDashboard && sourceMeta ? (
-                                        <Pill tone={sourceMeta.tone}>{sourceMeta.label}</Pill>
-                                    ) : isArchive && (isCreator || summaryOnly) ? (
-                                        <span className="text-xs text-gray-400">-</span>
-                                    ) : (
-                                        <Pill tone={unread ? "red" : "green"}>
-                                            {unread ? "Belum dibaca" : "Dibaca"}
-                                        </Pill>
-                                    )}
                                 </div>
                                 <div className="md:col-span-2 md:text-right">
                                     {summaryOnly ? (
@@ -321,10 +269,11 @@ function LetterList({ letters, emptyText = "Tidak ada data surat.", context = "d
                                     ) : (
                                         <Link
                                             href={actionUrl}
-                                            className="inline-flex rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-emerald-700"
+                                            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-gray-50 px-4 py-2.5 text-gray-600 hover:bg-gray-100 hover:text-emerald-700 md:w-auto md:p-2"
                                             title="Lihat detail"
                                         >
                                             <Eye className="h-4 w-4" />
+                                            <span className="ml-2 text-sm font-semibold md:hidden">Detail</span>
                                         </Link>
                                     )}
                                 </div>
@@ -354,7 +303,7 @@ function DispositionList({ dispositions }) {
                         >
                             <div className="min-w-0 md:col-span-6">
                                 <Link
-                                    href={`/pegawai/surat/${disposition.letter_id}`}
+                                    href={`/user/surat/${disposition.letter_id}`}
                                     className="font-semibold text-gray-950 hover:text-emerald-700"
                                 >
                                     {disposition.letter?.subject ||
@@ -369,12 +318,7 @@ function DispositionList({ dispositions }) {
                             <div className="md:col-span-2">
                                 {disposition.from_user?.name || "-"}
                             </div>
-                            <div className="md:col-span-2">
-                                <Pill tone={disposition.read_at ? "green" : "gray"}>
-                                    {disposition.read_at ? "Dibaca" : "Belum dibaca"}
-                                </Pill>
-                            </div>
-                            <div className="md:col-span-2 text-gray-600">
+                            <div className="md:col-span-4 text-gray-600">
                                 {disposition.note || "-"}
                             </div>
                         </div>
@@ -389,34 +333,38 @@ function DispositionList({ dispositions }) {
 }
 
 function ApprovalPage() {
-    const { approvalRequests } = usePage().props;
+    const { approvalRequests, canCreateDocuments } = usePage().props;
     const rows = collection(approvalRequests);
 
     return (
         <>
             <Header
-                title="Approval"
-                description="Permintaan paraf dan tanda tangan yang ditujukan kepada Anda."
+                title="Dokumen"
+                description="Dokumen yang perlu, menunggu giliran, sudah ditandatangani, atau ditolak."
+                actionHref={canCreateDocuments ? "/user/surat/create" : null}
+                actionText="Buat Dokumen"
             />
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                 <div className="hidden grid-cols-12 border-b border-gray-200 bg-gray-50 px-5 py-3 text-xs font-semibold uppercase text-gray-600 md:grid">
-                    <div className="col-span-5">Surat</div>
+                    <div className="col-span-7">Surat</div>
                     <div className="col-span-2">Pembuat</div>
                     <div className="col-span-2">Urutan</div>
-                    <div className="col-span-2">Status</div>
                     <div className="col-span-1 text-right">Aksi</div>
                 </div>
                 <div className="divide-y divide-gray-100">
                     {rows.length ? (
                         rows.map((request) => {
                             const status = signatureStatusMeta(request.status);
-                            const type = approvalTypeMeta(request);
                             return (
                                 <div key={request.id} className="grid gap-3 px-5 py-4 text-sm md:grid-cols-12 md:items-center">
-                                    <div className="min-w-0 md:col-span-5">
-                                        <Link href={`/pegawai/approval/${request.id}`} className="font-semibold text-gray-950 hover:text-emerald-700">
-                                            {request.letter?.subject || request.letter?.title || "Surat"}
-                                        </Link>
+                                    <div className="min-w-0 md:col-span-7">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Link href={`/user/approval/${request.id}`} className="font-semibold text-gray-950 hover:text-emerald-700">
+                                                {request.letter?.subject || request.letter?.title || "Surat"}
+                                            </Link>
+                                            <Pill tone={status.tone}>{status.label}</Pill>
+                                            {request.letter?.status === "draft" ? <Pill tone="amber">Draft</Pill> : null}
+                                        </div>
                                         <div className="mt-1 text-xs text-gray-500">
                                             {letterDisplayNumber(request.letter)} · {formatDate(request.created_at)}
                                         </div>
@@ -425,13 +373,10 @@ function ApprovalPage() {
                                         {request.letter?.creator?.name || "-"}
                                     </div>
                                     <div className="text-gray-700 md:col-span-2">
-                                        {type.label} {request.signing_order}
-                                    </div>
-                                    <div className="md:col-span-2">
-                                        <Pill tone={status.tone}>{status.label}</Pill>
+                                        Tanda tangan {request.signing_order}
                                     </div>
                                     <div className="md:col-span-1 md:text-right">
-                                        <Link href={`/pegawai/approval/${request.id}`} className="inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 hover:text-emerald-700" title={approvalActionLabel(request)}>
+                                        <Link href={`/user/approval/${request.id}`} className="inline-flex items-center rounded-lg px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 hover:text-emerald-700" title={approvalActionLabel(request)}>
                                             <Eye className="mr-1.5 h-4 w-4" />
                                             {approvalActionLabel(request)}
                                         </Link>
@@ -440,7 +385,7 @@ function ApprovalPage() {
                             );
                         })
                     ) : (
-                        <EmptyState message="Tidak ada permintaan approval dokumen." />
+                        <EmptyState message="Tidak ada dokumen tanda tangan." />
                     )}
                 </div>
                 <Pagination meta={approvalRequests} />
@@ -450,44 +395,42 @@ function ApprovalPage() {
 }
 
 function ApprovalDetailPage() {
-    const { signatureRequest, letter, hasReadLetter, previewUrl, settings = {} } = usePage().props;
+    const { signatureRequest, letter, hasReadLetter, previewUrl, downloadOtpRequired = true, settings = {} } = usePage().props;
     const readForm = useForm({});
     const otpForm = useForm({});
-    const approveForm = useForm({ note: "", otp_code: "" });
-    const rejectForm = useForm({ note: "", otp_code: "" });
+    const approveForm = useForm({
+        otp_code: "",
+        signature_visual_type: "qr",
+        signature_image: null,
+        save_signature_specimen: false,
+    });
 
     if (!signatureRequest || !letter) {
         return <EmptyState message="Permintaan approval tidak ditemukan." />;
     }
 
-    const status = signatureStatusMeta(signatureRequest.status);
     const type = approvalTypeMeta(signatureRequest);
     const canAct = signatureRequest.status === "ready" && hasReadLetter;
     const otpRequired = Boolean(settings?.signature_otp_enabled);
     const approveOtpReady = !otpRequired || approveForm.data.otp_code.trim();
-    const rejectOtpReady = !otpRequired || rejectForm.data.otp_code.trim();
 
-    const approve = () => {
+    const approve = async () => {
         if (!canAct || approveForm.processing || !approveOtpReady) return;
-        approveForm.post(`/pegawai/approval/${signatureRequest.id}/approve`, { preserveScroll: true });
-    };
-
-    const reject = () => {
-        if (!canAct || rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady) return;
-        rejectForm.post(`/pegawai/approval/${signatureRequest.id}/reject`, {
+        approveForm.post(`/user/approval/${signatureRequest.id}/approve`, {
             preserveScroll: true,
-            onSuccess: () => rejectForm.reset("note"),
+            forceFormData: true,
+            headers: await locationHeaders(),
         });
     };
 
     const markRead = () => {
         if (hasReadLetter || readForm.processing) return;
-        readForm.post(`/pegawai/approval/${signatureRequest.id}/read`, { preserveScroll: true });
+        readForm.post(`/user/approval/${signatureRequest.id}/read`, { preserveScroll: true });
     };
 
     const sendOtp = () => {
         if (!canAct || otpForm.processing) return;
-        otpForm.post(`/pegawai/approval/${signatureRequest.id}/otp`, { preserveScroll: true });
+        otpForm.post(`/user/approval/${signatureRequest.id}/otp`, { preserveScroll: true });
     };
 
     return (
@@ -500,21 +443,24 @@ function ApprovalDetailPage() {
                 <div className="space-y-5 xl:col-span-7">
                     <Panel title="Preview Surat">
                         {previewUrl ? (
-                            <iframe
-                                title="Preview PDF approval"
-                                src={previewUrl}
-                                className="h-[620px] w-full rounded-lg border border-gray-200 bg-gray-100"
-                            />
+                            <PdfDocumentViewer fileUrl={previewUrl} className="h-[620px]" />
                         ) : (
                             <div className="text-sm text-gray-500">Preview PDF tidak tersedia.</div>
                         )}
                     </Panel>
+                    {previewUrl ? (
+                        <div className="flex justify-end">
+                            <DocumentDownloadButton
+                                otpUrl={`/user/surat/${letter.id}/download-otp`}
+                                downloadUrl={`/user/surat/${letter.id}/download`}
+                                otpRequired={downloadOtpRequired}
+                                fileName={`${letter.letter_number || "dokumen"}.pdf`}
+                            />
+                        </div>
+                    ) : null}
                 </div>
                 <div className="space-y-5 xl:col-span-5">
                     <Panel title="Informasi Approval">
-                        <div className="mb-4">
-                            <Pill tone={status.tone}>{status.label}</Pill>
-                        </div>
                         <InfoGrid
                             rows={[
                                 ["Nomor Surat", letterDisplayNumber(letter)],
@@ -526,22 +472,22 @@ function ApprovalDetailPage() {
                                 ...(signatureRequest.approval_type === "paraf" ? [] : [["Halaman", signatureRequest.page_number]]),
                                 ["Tanggal request", formatDate(signatureRequest.created_at)],
                                 ...(signatureRequest.signed_at ? [["Disetujui", formatDate(signatureRequest.signed_at)]] : []),
-                                ...(signatureRequest.rejected_at ? [["Ditolak", formatDate(signatureRequest.rejected_at)]] : []),
-                                ...(signatureRequest.note ? [["Catatan", signatureRequest.note]] : []),
                             ]}
                         />
-                        <button
-                            type="button"
-                            onClick={markRead}
-                            disabled={hasReadLetter || readForm.processing}
-                            className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500"
-                        >
-                            <Eye className="mr-2 h-4 w-4" />
-                            {hasReadLetter ? "Dokumen Sudah Dibaca" : "Sudah Baca Dokumen"}
-                        </button>
+                        {!hasReadLetter ? (
+                            <button
+                                type="button"
+                                onClick={markRead}
+                                disabled={readForm.processing}
+                                className="mt-4 inline-flex w-full items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-500"
+                            >
+                                <Eye className="mr-2 h-4 w-4" />
+                                Sudah Baca Dokumen
+                            </button>
+                        ) : null}
                         {!hasReadLetter && signatureRequest.status === "ready" ? (
                             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                                Baca dokumen dari preview PDF, lalu klik tombol Sudah Baca Dokumen sebelum approve atau reject.
+                                Baca dokumen dari preview PDF, lalu klik tombol Sudah Baca Dokumen sebelum tanda tangan.
                             </div>
                         ) : null}
                     </Panel>
@@ -551,8 +497,7 @@ function ApprovalDetailPage() {
                             <InfoGrid
                                 rows={[
                                     ["Tanggal persetujuan", formatDate(signatureRequest.signed_at)],
-                                    ...(signatureRequest.note ? [["Catatan persetujuan", signatureRequest.note]] : []),
-                                    ...(signatureRequest.approval_type === "paraf" ? [] : [["Status verifikasi", signatureRequest.verification_token ? "QR verifikasi tersedia" : "QR verifikasi belum tersedia"]]),
+                                    ...(signatureRequest.approval_type === "paraf" ? [] : [["Verifikasi", signatureRequest.verification_token ? "QR verifikasi tersedia" : "QR verifikasi belum tersedia"]]),
                                 ]}
                             />
                             <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -569,29 +514,16 @@ function ApprovalDetailPage() {
                         </Panel>
                     ) : null}
 
-                    {signatureRequest.status === "rejected" ? (
-                        <Panel title="Ditolak">
-                            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                                Permintaan approval ini sudah ditolak.
-                            </div>
-                            <InfoGrid
-                                rows={[
-                                    ["Tanggal penolakan", formatDate(signatureRequest.rejected_at)],
-                                    ...(signatureRequest.note ? [["Catatan penolakan", signatureRequest.note]] : []),
-                                ]}
-                            />
-                        </Panel>
-                    ) : null}
-
                     {signatureRequest.status === "ready" ? <Panel title="Keputusan">
-                        {approveForm.errors.signature || rejectForm.errors.signature ? (
+                        {approveForm.errors.signature ? (
                             <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                                {approveForm.errors.signature || rejectForm.errors.signature}
+                                {approveForm.errors.signature}
                             </div>
                         ) : null}
+                        <SignatureVisualFields form={approveForm} />
                         {otpRequired ? (
                             <div className="mb-4 rounded-lg border border-sky-100 bg-sky-50 p-3">
-                                <div className="text-sm font-semibold text-sky-900">OTP diperlukan untuk approve atau reject.</div>
+                                <div className="text-sm font-semibold text-sky-900">OTP diperlukan untuk tanda tangan dokumen.</div>
                                 <p className="mt-1 text-xs text-sky-800">Klik kirim OTP setelah dokumen ditandai sudah dibaca. Kode akan dikirim ke email Anda.</p>
                                 <button
                                     type="button"
@@ -607,26 +539,17 @@ function ApprovalDetailPage() {
                                 ) : null}
                             </div>
                         ) : null}
-                        <div className="mb-4">
-                            <label className="text-sm font-semibold text-gray-800">Catatan persetujuan</label>
-                            <textarea
-                                value={approveForm.data.note}
-                                onChange={(event) => approveForm.setData("note", event.target.value)}
-                                rows={3}
-                                className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
-                                placeholder="Opsional."
-                            />
-                            {approveForm.errors.note ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.note}</div> : null}
-                        </div>
                         {otpRequired ? (
                             <div className="mb-4">
                                 <label className="text-sm font-semibold text-gray-800">Kode OTP untuk persetujuan</label>
                                 <input
                                     type="text"
                                     inputMode="numeric"
+                                    autoComplete="one-time-code"
+                                    maxLength={6}
                                     value={approveForm.data.otp_code}
                                     onChange={(event) => approveForm.setData("otp_code", event.target.value)}
-                                    className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                    className="mt-2 h-12 w-full rounded-lg border border-gray-300 px-4 py-3 text-base leading-none text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:ring-emerald-500"
                                     placeholder="Masukkan 6 digit OTP"
                                 />
                                 {approveForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.otp_code}</div> : null}
@@ -641,39 +564,6 @@ function ApprovalDetailPage() {
                             <CheckCheck className="mr-2 h-4 w-4" />
                             {type.action}
                         </button>
-                        <div className="mt-4">
-                            <label className="text-sm font-semibold text-gray-800">Catatan penolakan</label>
-                            <textarea
-                                value={rejectForm.data.note}
-                                onChange={(event) => rejectForm.setData("note", event.target.value)}
-                                rows={4}
-                                className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
-                                placeholder="Wajib diisi jika menolak."
-                            />
-                            {rejectForm.errors.note ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.note}</div> : null}
-                            {otpRequired ? (
-                                <div className="mt-3">
-                                    <label className="text-sm font-semibold text-gray-800">Kode OTP untuk penolakan</label>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        value={rejectForm.data.otp_code}
-                                        onChange={(event) => rejectForm.setData("otp_code", event.target.value)}
-                                        className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
-                                        placeholder="Masukkan 6 digit OTP"
-                                    />
-                                    {rejectForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.otp_code}</div> : null}
-                                </div>
-                            ) : null}
-                            <button
-                                type="button"
-                                onClick={reject}
-                                disabled={!canAct || rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady}
-                                className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
-                            >
-                                Tolak
-                            </button>
-                        </div>
                     </Panel> : null}
                 </div>
             </div>
@@ -684,40 +574,35 @@ function ApprovalDetailPage() {
 function SignatureApprovalPanel({ request }) {
     const { settings = {} } = usePage().props;
     const otpForm = useForm({});
-    const approveForm = useForm({ note: "", otp_code: "" });
-    const rejectForm = useForm({ note: "", otp_code: "" });
-    const status = signatureStatusMeta(request?.status);
+    const approveForm = useForm({
+        otp_code: "",
+        signature_visual_type: "qr",
+        signature_image: null,
+        save_signature_specimen: false,
+    });
     const type = approvalTypeMeta(request);
     const canAct = request?.status === "ready";
     const otpRequired = Boolean(settings?.signature_otp_enabled);
     const approveOtpReady = !otpRequired || approveForm.data.otp_code.trim();
-    const rejectOtpReady = !otpRequired || rejectForm.data.otp_code.trim();
 
     if (!request) return null;
 
-    const approve = () => {
+    const approve = async () => {
         if (!canAct || approveForm.processing || !approveOtpReady) return;
-        approveForm.post(`/pegawai/approval/${request.id}/approve`, { preserveScroll: true });
-    };
-
-    const reject = () => {
-        if (!canAct || rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady) return;
-        rejectForm.post(`/pegawai/approval/${request.id}/reject`, {
+        approveForm.post(`/user/approval/${request.id}/approve`, {
             preserveScroll: true,
-            onSuccess: () => rejectForm.reset("note"),
+            forceFormData: true,
+            headers: await locationHeaders(),
         });
     };
 
     const sendOtp = () => {
         if (!canAct || otpForm.processing) return;
-        otpForm.post(`/pegawai/approval/${request.id}/otp`, { preserveScroll: true });
+        otpForm.post(`/user/approval/${request.id}/otp`, { preserveScroll: true });
     };
 
     return (
         <Panel title="Approval Dokumen">
-            <div className="mb-4">
-                <Pill tone={status.tone}>{status.label}</Pill>
-            </div>
             <InfoGrid
                 rows={[
                     ["User Approval", request.signer?.name || "-"],
@@ -725,8 +610,6 @@ function SignatureApprovalPanel({ request }) {
                     ["Urutan", request.signing_order],
                     ...(request.approval_type === "paraf" ? [] : [["Halaman", request.page_number]]),
                     ...(request.signed_at ? [["Disetujui", formatDate(request.signed_at)]] : []),
-                    ...(request.rejected_at ? [["Ditolak", formatDate(request.rejected_at)]] : []),
-                    ...(request.note ? [["Catatan", request.note]] : []),
                 ]}
             />
             {request.status === "pending" ? (
@@ -739,21 +622,17 @@ function SignatureApprovalPanel({ request }) {
                     {type.doneMessage}
                 </div>
             ) : null}
-            {request.status === "rejected" ? (
+            {approveForm.errors.signature ? (
                 <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    Permintaan approval ini sudah ditolak.
-                </div>
-            ) : null}
-            {approveForm.errors.signature || rejectForm.errors.signature ? (
-                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {approveForm.errors.signature || rejectForm.errors.signature}
+                    {approveForm.errors.signature}
                 </div>
             ) : null}
             {request.status === "ready" ? (
                 <div className="mt-4 space-y-4">
+                    <SignatureVisualFields form={approveForm} />
                     {otpRequired ? (
                         <div className="rounded-lg border border-sky-100 bg-sky-50 p-3">
-                            <div className="text-sm font-semibold text-sky-900">OTP diperlukan untuk approve atau reject.</div>
+                            <div className="text-sm font-semibold text-sky-900">OTP diperlukan untuk tanda tangan dokumen.</div>
                             <p className="mt-1 text-xs text-sky-800">Kode OTP dikirim ke email Anda dan berlaku 10 menit.</p>
                             <button
                                 type="button"
@@ -769,26 +648,17 @@ function SignatureApprovalPanel({ request }) {
                             ) : null}
                         </div>
                     ) : null}
-                    <div>
-                        <label className="text-sm font-semibold text-gray-800">Catatan persetujuan</label>
-                        <textarea
-                            value={approveForm.data.note}
-                            onChange={(event) => approveForm.setData("note", event.target.value)}
-                            rows={3}
-                            className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
-                            placeholder="Opsional."
-                        />
-                        {approveForm.errors.note ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.note}</div> : null}
-                    </div>
                     {otpRequired ? (
                         <div>
                             <label className="text-sm font-semibold text-gray-800">Kode OTP untuk persetujuan</label>
                             <input
                                 type="text"
                                 inputMode="numeric"
+                                autoComplete="one-time-code"
+                                maxLength={6}
                                 value={approveForm.data.otp_code}
                                 onChange={(event) => approveForm.setData("otp_code", event.target.value)}
-                                className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
+                                className="mt-2 h-12 w-full rounded-lg border border-gray-300 px-4 py-3 text-base leading-none text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:ring-emerald-500"
                                 placeholder="Masukkan 6 digit OTP"
                             />
                             {approveForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{approveForm.errors.otp_code}</div> : null}
@@ -803,39 +673,6 @@ function SignatureApprovalPanel({ request }) {
                         <CheckCheck className="mr-2 h-4 w-4" />
                         {type.action}
                     </button>
-                    <div>
-                        <label className="text-sm font-semibold text-gray-800">Catatan penolakan</label>
-                        <textarea
-                            value={rejectForm.data.note}
-                            onChange={(event) => rejectForm.setData("note", event.target.value)}
-                            rows={4}
-                            className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
-                            placeholder="Wajib diisi jika menolak."
-                        />
-                        {rejectForm.errors.note ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.note}</div> : null}
-                        {otpRequired ? (
-                            <div className="mt-3">
-                                <label className="text-sm font-semibold text-gray-800">Kode OTP untuk penolakan</label>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    value={rejectForm.data.otp_code}
-                                    onChange={(event) => rejectForm.setData("otp_code", event.target.value)}
-                                    className="mt-2 w-full rounded-lg border-gray-300 text-sm focus:border-emerald-500 focus:ring-emerald-500"
-                                    placeholder="Masukkan 6 digit OTP"
-                                />
-                                {rejectForm.errors.otp_code ? <div className="mt-1 text-xs text-red-600">{rejectForm.errors.otp_code}</div> : null}
-                            </div>
-                        ) : null}
-                        <button
-                            type="button"
-                            onClick={reject}
-                            disabled={rejectForm.processing || !rejectForm.data.note.trim() || !rejectOtpReady}
-                            className="mt-3 inline-flex w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-100 disabled:text-gray-400"
-                        >
-                            Tolak
-                        </button>
-                    </div>
                 </div>
             ) : null}
         </Panel>
@@ -860,12 +697,10 @@ function InboxPage({ mode }) {
             <Header title={title} description={description} />
             <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                 <Search
-                    URL={mode === "tebusan" ? "/pegawai/inbox/tebusan" : mode === "disposisi" ? "/pegawai/disposisi" : "/pegawai/inbox/internal"}
+                    URL={mode === "tebusan" ? "/user/inbox/tebusan" : mode === "disposisi" ? "/user/disposisi" : "/user/inbox/internal"}
                     filters={mode === "disposisi" ? [
                         { key: "from_user_ids", label: "Pengirim", options: filterOptions.users || [] },
                     ] : [
-                        { key: "letter_type_ids", label: "Jenis Surat", options: filterOptions.letterTypes || [] },
-                        { key: "read_statuses", label: "Status Baca", options: filterOptions.readStatuses || [] },
                         { key: "creator_ids", label: "Pengirim", options: filterOptions.users || [] },
                     ]}
                 />
@@ -886,131 +721,98 @@ function InboxPage({ mode }) {
     );
 }
 
-function CreateMenuPage() {
-    const items = [
-        {
-            title: "Buat Surat Masuk Eksternal",
-            description: "Input surat dari pihak eksternal dengan scan PDF.",
-            href: "/pegawai/surat/masuk-eksternal",
-            icon: Mail,
-        },
-        {
-            title: "Buat Surat Internal",
-            description:
-                "Kirim surat internal ke user, unit, atau jabatan organisasi.",
-            href: "/pegawai/surat/internal",
-            icon: Send,
-        },
-        {
-            title: "Buat Surat Keluar",
-            description:
-                "Buat surat untuk tujuan eksternal perusahaan dengan scan PDF.",
-            href: "/pegawai/surat/keluar",
-            icon: FilePlus2,
-        },
-        {
-            title: "Arsip Scan",
-            description:
-                "Simpan scan surat sebagai arsip sistem tanpa alur pengiriman.",
-            href: "/pegawai/surat/arsip",
-            icon: Archive,
-        },
-    ];
+function SignatureVisualFields({ form }) {
+    const { auth } = usePage().props;
+    const hasSavedSpecimen = Boolean(auth?.user?.signature_specimen_path);
+    const visualType = form.data.signature_visual_type || "qr";
 
     return (
-        <>
-            <Header
-                title="Buat Surat"
-                description="Pilih jenis surat yang akan dibuat atau disimpan."
-            />
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {items.map(({ title, description, href, icon: Icon }) => (
-                    <Link
-                        key={href}
-                        href={href}
-                        className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm hover:border-emerald-300"
-                    >
-                        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-                            <Icon className="h-5 w-5" />
-                        </div>
-                        <div className="mt-5 text-base font-semibold text-gray-950">
-                            {title}
-                        </div>
-                        <div className="mt-2 text-sm text-gray-600">
-                            {description}
-                        </div>
-                    </Link>
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div className="text-sm font-semibold text-gray-900">Visual Tanda Tangan</div>
+            <div className="mt-3 grid gap-2">
+                {[
+                    ["qr", "QR Code Sistem", "Sistem menempel QR verifikasi di dokumen."],
+                    ["saved_signature", "Spesimen Tersimpan", hasSavedSpecimen ? "Gunakan gambar tanda tangan yang sudah tersimpan." : "Belum ada spesimen tersimpan."],
+                    ["uploaded_signature", "Upload Gambar", "Upload gambar tanda tangan untuk dokumen ini."],
+                ].map(([value, label, description]) => (
+                    <label key={value} className={`flex items-start gap-3 rounded-lg border bg-white px-3 py-2 text-sm ${visualType === value ? "border-emerald-300" : "border-gray-200"} ${value === "saved_signature" && !hasSavedSpecimen ? "opacity-60" : ""}`}>
+                        <input
+                            type="radio"
+                            name="signature_visual_type"
+                            value={value}
+                            checked={visualType === value}
+                            disabled={value === "saved_signature" && !hasSavedSpecimen}
+                            onChange={() => form.setData("signature_visual_type", value)}
+                            className="mt-1 border-gray-300 text-emerald-700 focus:ring-emerald-600"
+                        />
+                        <span>
+                            <span className="font-semibold text-gray-900">{label}</span>
+                            <span className="block text-xs text-gray-500">{description}</span>
+                        </span>
+                    </label>
                 ))}
             </div>
-        </>
+
+            {visualType === "uploaded_signature" ? (
+                <div className="mt-3 space-y-3">
+                    <label className="block text-sm font-semibold text-gray-800">
+                        Gambar Tanda Tangan
+                        <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg"
+                            onChange={(event) => form.setData("signature_image", event.target.files?.[0] || null)}
+                            className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input
+                            type="checkbox"
+                            checked={Boolean(form.data.save_signature_specimen)}
+                            onChange={(event) => form.setData("save_signature_specimen", event.target.checked)}
+                            className="rounded border-gray-300 text-emerald-700 focus:ring-emerald-600"
+                        />
+                        Simpan sebagai spesimen saya
+                    </label>
+                </div>
+            ) : null}
+
+            {form.errors.signature_visual_type ? <div className="mt-2 text-xs text-red-600">{form.errors.signature_visual_type}</div> : null}
+            {form.errors.signature_image ? <div className="mt-2 text-xs text-red-600">{form.errors.signature_image}</div> : null}
+        </div>
     );
 }
 
 function CreatePage() {
     const pageProps = usePage().props;
     const {
-        letterTypes = [],
         targetOptions = {},
-        auth,
-        mode = "internal",
         errors: serverErrors = {},
     } = pageProps;
-    const isInternal = mode === "internal";
-    const isOutgoing = mode === "outgoing";
-    const supportsDraftSend = isInternal || isOutgoing;
+    const isInternal = true;
+    const supportsDraftSend = true;
     const pageConfig = {
         internal: {
-            title: "Buat Surat Internal",
+            title: "Buat Dokumen",
             description:
-                "Kirim surat internal berbasis scan PDF.",
-            submitUrl: "/pegawai/surat/internal",
-            submitText: "Kirim Surat",
+                "Kirim dokumen internal berbasis scan PDF.",
+            submitUrl: "/user/surat/internal",
+            submitText: "Kirim Dokumen",
         },
-        outgoing: {
-            title: "Buat Surat Keluar",
-            description:
-                "Buat surat untuk tujuan eksternal perusahaan berbasis scan PDF.",
-            submitUrl: "/pegawai/surat/keluar",
-            submitText: "Kirim Surat Keluar",
-        },
-        incoming_external: {
-            title: "Buat Surat Masuk Eksternal",
-            description:
-                "Simpan surat masuk dari pihak eksternal dengan scan PDF.",
-            submitUrl: "/pegawai/surat/masuk-eksternal",
-            submitText: "Simpan Surat Masuk Eksternal",
-        },
-        archive: {
-            title: "Arsip Surat",
-            description:
-                "Simpan scan surat ke arsip sistem tanpa alur pengiriman atau disposisi.",
-            submitUrl: "/pegawai/surat/arsip",
-            submitText: "Simpan Arsip",
-        },
-    }[mode] || {
-        title: "Buat Surat Internal",
+    }.internal || {
+        title: "Buat Dokumen",
         description:
-            "Kirim surat internal berbasis scan PDF.",
-        submitUrl: "/pegawai/surat/internal",
-        submitText: "Kirim Surat",
+            "Kirim dokumen internal berbasis scan PDF.",
+        submitUrl: "/user/surat/internal",
+        submitText: "Kirim Dokumen",
     };
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
-    const [recipientDraft, setRecipientDraft] = useState({
-        target_type: "department",
-        target_id: "",
-    });
-    const [ccDraft, setCcDraft] = useState({
-        target_type: "department",
-        target_id: "",
-    });
     const [submitting, setSubmitting] = useState(false);
     const [clientErrors, setClientErrors] = useState([]);
     const [signaturePlacementActive, setSignaturePlacementActive] = useState(false);
-    const originOptions = internalOriginOptions(auth?.user);
-    const defaultOrigin = originOptions[0] || { type: "", rawId: "", id: "", name: "" };
 
     const { data, setData, post, processing, errors, reset } = useForm({
         submit_action: "send",
+        signature_flow: "sequential",
         letter_type_id: "",
         letter_number: "",
         subject: "",
@@ -1018,14 +820,7 @@ function CreatePage() {
         targets: [],
         cc_targets: [],
         signature_requests: [],
-        payload: {
-            origin_name: "",
-            internal_origin_type: defaultOrigin.type,
-            internal_origin_id: defaultOrigin.rawId,
-            internal_origin_name: defaultOrigin.name,
-            external_recipient: "",
-            notes: "",
-        },
+        payload: { notes: "" },
     });
     const formErrors = { ...serverErrors, ...errors };
 
@@ -1034,41 +829,6 @@ function CreatePage() {
             if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
         };
     }, [pdfPreviewUrl]);
-
-    function updatePayload(key, value) {
-        setData("payload", { ...data.payload, [key]: value });
-    }
-
-    function addTarget(kind) {
-        const draft = kind === "recipient" ? recipientDraft : ccDraft;
-        if (!draft.target_id) return;
-
-        const field = kind === "recipient" ? "targets" : "cc_targets";
-        const exists = data[field].some(
-            (target) =>
-                target.target_type === draft.target_type &&
-                String(target.target_id) === String(draft.target_id),
-        );
-        if (exists) return;
-
-        setData(field, [
-            ...data[field],
-            {
-                target_type: draft.target_type,
-                target_id: Number(draft.target_id),
-            },
-        ]);
-        kind === "recipient"
-            ? setRecipientDraft({ ...draft, target_id: "" })
-            : setCcDraft({ ...draft, target_id: "" });
-    }
-
-    function removeTarget(field, index) {
-        setData(
-            field,
-            data[field].filter((_, itemIndex) => itemIndex !== index),
-        );
-    }
 
     function handleFile(file) {
         if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
@@ -1095,38 +855,12 @@ function CreatePage() {
     }
 
     function normalizeSignatureRequests(requests) {
-        const grouped = [
-            ...requests.filter((request) => request.approval_type === "paraf"),
-            ...requests.filter((request) => (request.approval_type || "signature") === "signature"),
-        ];
-        let signatureNumber = 0;
-
-        return grouped.map((request, index) => {
-            const isSignatureRequest = (request.approval_type || "signature") === "signature";
-            if (isSignatureRequest) signatureNumber += 1;
-
-            return {
-                ...request,
-                approval_type: request.approval_type || "signature",
-                signing_order: index + 1,
-                signature_number: isSignatureRequest ? signatureNumber : null,
-            };
-        });
-    }
-
-    function addParafRequest() {
-        if (!isInternal) return;
-        const signer = (targetOptions.users || [])[0];
-
-        setData("signature_requests", normalizeSignatureRequests([
-            ...data.signature_requests,
-            {
-                local_id: `${Date.now()}-${data.signature_requests.length}`,
-                approval_type: "paraf",
-                signer_user_id: signer?.id || "",
-                signing_order: data.signature_requests.length + 1,
-            },
-        ]));
+        return requests.map((request, index) => ({
+            ...request,
+            approval_type: "signature",
+            signing_order: index + 1,
+            signature_number: index + 1,
+        }));
     }
 
     function addSignatureRequest(placement) {
@@ -1173,10 +907,17 @@ function CreatePage() {
     function submit(e, action = "send") {
         e.preventDefault();
         setClientErrors([]);
-        if (isInternal) {
-            const invalidSignature = data.signature_requests.find((request) => !request.signer_user_id);
+        if (isInternal && action === "send") {
+            if (!data.signature_requests.length) {
+                const message = "Tambahkan minimal satu penanda tangan.";
+                setClientErrors([message]);
+                window.alert(message);
+                return;
+            }
+
+            const invalidSignature = data.signature_requests.find((request) => !request.signer_user_id || !request.page_number || request.x === undefined || request.y === undefined || !request.width || !request.height);
             if (invalidSignature) {
-                const message = "Pilih user untuk semua paraf dan tanda tangan.";
+                const message = "Pilih user dan posisi QR untuk semua penanda tangan.";
                 setClientErrors([message]);
                 window.alert(message);
                 return;
@@ -1212,22 +953,12 @@ function CreatePage() {
             <form onSubmit={submit} className="grid gap-6 xl:grid-cols-12">
                 <div className="space-y-5 xl:col-span-6">
                     <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                        <SelectField
-                            label="Jenis Surat"
-                            value={data.letter_type_id}
-                            onChange={(value) => setData("letter_type_id", value)}
-                            options={letterTypes.map((letterType) => ({
-                                id: letterType.id,
-                                name: letterType.name,
-                            }))}
-                            error={formErrors.letter_type_id}
-                        />
                         <Field
-                            label="Nomor Surat"
+                            label="Nomor Dokumen"
                             value={data.letter_number}
                             onChange={(value) => setData("letter_number", value)}
                             error={formErrors.letter_number}
-                            placeholder={mode === "incoming_external" ? "Masukkan nomor surat dari dokumen eksternal" : "Opsional, jika sudah ada nomor"}
+                            placeholder="Opsional, jika sudah ada nomor"
                         />
                         <Field
                             label="Perihal"
@@ -1236,98 +967,18 @@ function CreatePage() {
                             error={formErrors.subject}
                             placeholder="Perihal surat"
                         />
-                        {isInternal || isOutgoing ? (
-                            <SelectField
-                                label="Asal Surat"
-                                value={
-                                    data.payload.internal_origin_type && data.payload.internal_origin_id
-                                        ? `${data.payload.internal_origin_type}:${data.payload.internal_origin_id}`
-                                        : ""
-                                }
-                                onChange={(value) => {
-                                    const selected = originOptions.find(
-                                        (option) => option.id === value,
-                                    );
-                                    if (!selected) return;
-                                    setData("payload", {
-                                        ...data.payload,
-                                        internal_origin_type: selected.type,
-                                        internal_origin_id: Number(selected.rawId),
-                                        internal_origin_name: selected.name,
-                                    });
-                                }}
-                                options={originOptions}
-                                error={
-                                    formErrors["payload.internal_origin_type"] ||
-                                    formErrors["payload.internal_origin_id"]
-                                }
-                                noPlaceholder
-                            />
-                        ) : null}
-                        {isOutgoing ? (
-                            <Field
-                                label="Tujuan Eksternal"
-                                value={data.payload.external_recipient}
-                                onChange={(value) =>
-                                    updatePayload("external_recipient", value)
-                                }
-                                error={formErrors["payload.external_recipient"]}
-                                placeholder="Nama perusahaan/instansi penerima"
-                            />
-                        ) : null}
-                        {mode === "incoming_external" ? (
-                            <Field
-                                label="Asal Surat"
-                                value={data.payload.origin_name}
-                                onChange={(value) =>
-                                    updatePayload("origin_name", value)
-                                }
-                                error={formErrors["payload.origin_name"]}
-                                placeholder="Nama instansi/perusahaan pengirim"
-                            />
-                        ) : null}
-                        {mode === "incoming_external" || mode === "archive" ? (
-                            <TextareaField
-                                label="Catatan"
-                                value={data.payload.notes}
-                                onChange={(value) =>
-                                    updatePayload("notes", value)
-                                }
-                                rows={4}
-                                error={formErrors["payload.notes"]}
-                                placeholder="Catatan tambahan"
-                            />
-                        ) : null}
+                        <SelectField
+                            label="Alur Tanda Tangan"
+                            value={data.signature_flow}
+                            onChange={(value) => setData("signature_flow", value)}
+                            options={[
+                                { id: "sequential", name: "Berurutan" },
+                                { id: "parallel", name: "Tidak Berurutan" },
+                            ]}
+                            error={formErrors.signature_flow}
+                            noPlaceholder
+                        />
                     </div>
-
-                    {isInternal || isOutgoing ? (
-                        <>
-                            {isInternal ? (
-                                <TargetPicker
-                                    title="Tujuan"
-                                    draft={recipientDraft}
-                                    setDraft={setRecipientDraft}
-                                    targets={data.targets}
-                                    field="targets"
-                                    targetOptions={targetOptions}
-                                    onAdd={() => addTarget("recipient")}
-                                    onRemove={removeTarget}
-                                    error={formErrors.targets}
-                                />
-                            ) : null}
-
-                            <TargetPicker
-                                title="Tembusan"
-                                draft={ccDraft}
-                                setDraft={setCcDraft}
-                                targets={data.cc_targets}
-                                field="cc_targets"
-                                targetOptions={targetOptions}
-                                onAdd={() => addTarget("cc")}
-                                onRemove={removeTarget}
-                            />
-                        </>
-                    ) : null}
 
                     <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                         <label className="block text-sm font-semibold text-gray-900">
@@ -1365,7 +1016,6 @@ function CreatePage() {
                         <SignatureRequestPanel
                             requests={data.signature_requests}
                             signerOptions={targetOptions.users || []}
-                            onAddParaf={addParafRequest}
                             onUpdate={updateSignatureRequest}
                             onRemove={removeSignatureRequest}
                             onMove={moveSignatureRequest}
@@ -1389,7 +1039,7 @@ function CreatePage() {
                             </button>
                         ) : null}
                         <Link
-                            href="/pegawai/surat"
+                            href="/user/surat"
                             className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
                         >
                             Batal
@@ -1400,7 +1050,7 @@ function CreatePage() {
                             className="inline-flex items-center rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
                         >
                             <Send className="mr-2 h-4 w-4" />
-                            {submitting ? "Menyimpan..." : supportsDraftSend ? "Send" : pageConfig.submitText}
+                            {submitting ? "Menyimpan..." : pageConfig.submitText}
                         </button>
                     </div>
                 </div>
@@ -1449,7 +1099,6 @@ function CreatePage() {
 function SignatureRequestPanel({
     requests,
     signerOptions,
-    onAddParaf,
     onUpdate,
     onRemove,
     onMove,
@@ -1462,21 +1111,13 @@ function SignatureRequestPanel({
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h2 className="text-sm font-semibold text-gray-950">Paraf dan Tanda Tangan</h2>
+                    <h2 className="text-sm font-semibold text-gray-950">Tanda Tangan</h2>
                     <p className="mt-1 text-xs leading-5 text-gray-500">
-                        Paraf diproses lebih dulu tanpa QR. Tanda tangan QR ditempatkan di PDF setelah semua paraf selesai.
+                        Pilih penanda tangan dan tempatkan QR pada PDF.
                     </p>
                 </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                    type="button"
-                    onClick={onAddParaf}
-                    className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Tambah paraf
-                </button>
                 <button
                     type="button"
                     disabled={!pdfReady}
@@ -1487,7 +1128,7 @@ function SignatureRequestPanel({
                             : "bg-emerald-700 text-white hover:bg-emerald-800"
                     }`}
                 >
-                    {placementActive ? "Batal tambah titik TTD" : "Tambah tanda tangan QR"}
+                    {placementActive ? "Batal tambah titik TTD" : "Tambah penanda tangan"}
                 </button>
             </div>
             {!pdfReady ? (
@@ -1495,7 +1136,7 @@ function SignatureRequestPanel({
             ) : placementActive ? (
                 <div className="mt-2 text-xs text-amber-700">Mode tambah TTD aktif. Klik satu posisi di preview PDF. Setelah titik dibuat, mode akan mati agar PDF bisa discroll lagi.</div>
             ) : (
-                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal. Paraf tidak membutuhkan posisi PDF.</div>
+                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal.</div>
             )}
 
             {errors.signature_requests ? (
@@ -1507,13 +1148,7 @@ function SignatureRequestPanel({
             <div className="mt-4 space-y-3">
                 {requests.length ? requests.map((request, index) => (
                     <div key={request.local_id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                        <div className="grid gap-3 md:grid-cols-[110px_90px_1fr_110px_auto] md:items-end">
-                            <div className="text-xs font-semibold text-gray-600">
-                                Jenis
-                                <div className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium ${request.approval_type === "paraf" ? "border-blue-100 bg-blue-50 text-blue-700" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>
-                                    {request.approval_type === "paraf" ? "Paraf" : "Tanda Tangan"}
-                                </div>
-                            </div>
+                        <div className="grid gap-3 md:grid-cols-[90px_1fr_110px_auto] md:items-end">
                             <label className="text-xs font-semibold text-gray-600">
                                 Urutan
                                 <select
@@ -1546,7 +1181,7 @@ function SignatureRequestPanel({
                             <div className="text-xs font-semibold text-gray-600">
                                 Halaman
                                 <div className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800">
-                                    {request.approval_type === "paraf" ? "-" : request.page_number}
+                                    {request.page_number}
                                 </div>
                             </div>
                             <button
@@ -1558,9 +1193,7 @@ function SignatureRequestPanel({
                             </button>
                         </div>
                         <div className="mt-2 text-xs text-gray-500">
-                            {request.approval_type === "paraf"
-                                ? "Paraf hanya approval sistem dan tidak ditempel ke PDF."
-                                : `Posisi: ${(request.x * 100).toFixed(1)}%, ${(request.y * 100).toFixed(1)}% · Ukuran: ${(request.width * 100).toFixed(1)}% x ${(request.height * 100).toFixed(1)}%`}
+                            {`Posisi: ${(request.x * 100).toFixed(1)}%, ${(request.y * 100).toFixed(1)}% · Ukuran: ${(request.width * 100).toFixed(1)}% x ${(request.height * 100).toFixed(1)}%`}
                         </div>
                         {errors[`signature_requests.${index}.signer_user_id`] ? (
                             <div className="mt-2 text-xs text-red-600">{errors[`signature_requests.${index}.signer_user_id`]}</div>
@@ -1568,7 +1201,7 @@ function SignatureRequestPanel({
                     </div>
                 )) : (
                     <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                        Belum ada paraf atau tanda tangan. Tambahkan paraf, atau upload PDF lalu klik area preview untuk menambah tanda tangan QR.
+                        Belum ada penanda tangan. Upload PDF lalu klik area preview untuk menambah tanda tangan QR.
                     </div>
                 )}
             </div>
@@ -1579,66 +1212,25 @@ function SignatureRequestPanel({
 function DetailPage() {
     const {
         letter,
-        notifications = [],
         targetOptions = {},
-        dispositionTargetOptions = {},
         activeSignatureRequest,
         auth,
+        previewUrl,
+        hasPreview,
+        downloadOtpRequired = true,
     } = usePage().props;
-    const rootDispositionForm = useForm({
-        target_type: dispositionTargetOptions?.targetTypes?.[0] || "directorate",
-        target_id: "",
-        note: "",
-    });
 
     if (!letter) {
         return (
-            <EmptyState message="Surat tidak ditemukan atau Anda tidak memiliki akses." />
+            <EmptyState message="Dokumen tidak ditemukan atau Anda tidak memiliki akses." />
         );
     }
 
-    const recipientTargets = (letter.targets || []).filter(
-        (target) => target.kind === "recipient",
-    );
-    const ccTargets = (letter.targets || []).filter(
-        (target) => target.kind === "cc",
-    );
     const businessType = businessLetterType(letter);
-    const isIncomingExternal = businessType === "incoming_external";
-    const isOutgoingLetter = businessType === "outgoing";
-    const typeMeta = letterTypeMeta(letter);
-    const dispositionTypes = availableDispositionTypes(dispositionTargetOptions);
-    const dispositionTree = buildDispositionTree(letter.dispositions || []);
-    const readStatuses = letter.target_read_statuses?.length
-        ? letter.target_read_statuses
-        : (letter.read_receipts || []);
     const canDeleteDraft =
         letter.status === "draft" &&
         String(letter.created_by) === String(auth?.user?.id);
-    const canPublish =
-        ["incoming_external", "outgoing", "archive"].includes(businessType) &&
-        String(letter.created_by) === String(auth?.user?.id);
-    const canCreateRootDisposition =
-        isIncomingExternal &&
-        String(letter.created_by) === String(auth?.user?.id) &&
-        dispositionTypes.length > 0;
-    const currentVersionPath = letter.current_version?.signed_pdf_path
-        || letter.current_version?.source_pdf_path
-        || letter.signed_pdf_path
-        || letter.attachments?.[0]?.file_path;
-    const canUploadRevision =
-        businessType === "internal" &&
-        String(letter.created_by) === String(auth?.user?.id) &&
-        letter.signature_status === "rejected" &&
-        (letter.signature_requests || []).length > 0;
-
-    function submitRootDisposition(event) {
-        event.preventDefault();
-        rootDispositionForm.post(`/pegawai/surat/${letter.id}/disposisi`, {
-            preserveScroll: true,
-            onSuccess: () => rootDispositionForm.reset("target_id", "note"),
-        });
-    }
+    const canUploadRevision = false;
 
     return (
         <>
@@ -1651,11 +1243,11 @@ function DetailPage() {
                     <button
                         type="button"
                         onClick={() => {
-                            if (confirm("Hapus draft surat ini?")) {
-                                router.delete(`/pegawai/surat/${letter.id}`);
+                            if (confirm("Hapus draft dokumen ini?")) {
+                                router.delete(`/user/surat/${letter.id}`);
                             }
                         }}
-                        className="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100"
+                        className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto"
                     >
                         <Trash2 className="mr-2 h-4 w-4" />
                         Hapus Draft
@@ -1663,52 +1255,40 @@ function DetailPage() {
                 </div>
             ) : null}
             <div className="grid gap-6 xl:grid-cols-12">
-                <div className="space-y-5 xl:col-span-7">
-                    <Panel title="Metadata Surat">
-                        <div className="mb-4">
-                            <Pill tone={typeMeta.tone}>{typeMeta.label}</Pill>
-                        </div>
+                <div className="space-y-5 xl:col-span-8">
+                    <Panel title="Preview Surat">
+                        {hasPreview ? (
+                            <PdfDocumentViewer fileUrl={previewUrl || `/user/surat/${letter.id}/preview`} className="h-[520px] md:h-[680px]" />
+                        ) : (
+                            <div className="text-sm text-gray-500">
+                                Preview tidak tersedia.
+                            </div>
+                        )}
+                    </Panel>
+                    {hasPreview ? (
+                        <DocumentDownloadButton
+                            otpUrl={`/user/surat/${letter.id}/download-otp`}
+                            downloadUrl={`/user/surat/${letter.id}/download`}
+                            otpRequired={downloadOtpRequired}
+                            fileName={`${letter.letter_number || "dokumen"}.pdf`}
+                            className="w-full justify-center"
+                        />
+                    ) : null}
+                </div>
+
+                <div className="space-y-5 xl:col-span-4">
+                    <Panel title="Metadata Dokumen">
+                        {letter.status === "draft" ? (
+                            <div className="mb-4 flex flex-wrap gap-2">
+                                <Pill tone="amber">Draft</Pill>
+                            </div>
+                        ) : null}
                         <InfoGrid
                             rows={[
                                 ["Nomor", letter.letter_number || "-"],
-                                [
-                                    "Jenis Surat",
-                                    letter.letter_type?.name || "-",
-                                ],
                                 ["Diinput oleh", letter.creator?.name || "-"],
                                 ["Tanggal input", formatInputDate(letter.created_at)],
                                 ["Jam input", formatInputTime(letter.created_at)],
-                                [
-                                    "Jumlah Halaman",
-                                    `${letter.page_count || 1} Halaman`,
-                                ],
-                                ...(letter.signature_status ? [["Status Approval Dokumen", signatureStatusMeta(letter.signature_status).label]] : []),
-                                ...(!isIncomingExternal && !isOutgoingLetter ? [["Status", letter.status]] : []),
-                                ...(letter.payload?.internal_origin_name
-                                    ? [
-                                          [
-                                              "Asal Surat",
-                                              letter.payload
-                                                  .internal_origin_name,
-                                          ],
-                                      ]
-                                    : []),
-                                ...(letter.payload?.origin_name
-                                    ? [
-                                          [
-                                              "Asal Surat",
-                                              letter.payload.origin_name,
-                                          ],
-                                      ]
-                                    : []),
-                                ...(letter.payload?.external_recipient
-                                    ? [
-                                          [
-                                              "Tujuan Eksternal",
-                                              letter.payload.external_recipient,
-                                          ],
-                                      ]
-                                    : []),
                                 ...(letter.payload?.notes
                                     ? [["Catatan", letter.payload.notes]]
                                     : []),
@@ -1716,156 +1296,13 @@ function DetailPage() {
                         />
                     </Panel>
 
-                    {businessType === "internal" ? <Panel title="Target dan Tembusan">
-                        <TargetSummary
-                            title="Tujuan"
-                            targets={recipientTargets}
-                            targetOptions={targetOptions}
-                        />
-                        <div className="mt-4">
-                            <TargetSummary
-                                title="Tembusan"
-                                targets={ccTargets}
-                                targetOptions={targetOptions}
-                            />
-                        </div>
-                    </Panel> : null}
-
                     {businessType === "internal" ? (
                         <ApprovalHistoryPanel letter={letter} />
-                    ) : null}
-
-                    {businessType === "internal" ? (
-                        <DocumentVersionHistory letter={letter} />
-                    ) : null}
-
-                    {canUploadRevision ? (
-                        <RevisionUploadPanel
-                            letter={letter}
-                            targetOptions={targetOptions}
-                        />
                     ) : null}
 
                     {activeSignatureRequest ? (
                         <SignatureApprovalPanel request={activeSignatureRequest} />
                     ) : null}
-
-                    {isOutgoingLetter ? <Panel title="Tembusan">
-                        <TargetSummary
-                            title="Tembusan"
-                            targets={ccTargets}
-                            targetOptions={targetOptions}
-                        />
-                    </Panel> : null}
-
-                    {canPublish ? (
-                        <PublishExternalPanel
-                            letter={letter}
-                            targetOptions={targetOptions}
-                        />
-                    ) : null}
-
-                    {canCreateRootDisposition ? (
-                        <RootDispositionForm
-                            form={rootDispositionForm}
-                            targetOptions={dispositionTargetOptions}
-                            targetTypes={dispositionTypes}
-                            onSubmit={submitRootDisposition}
-                        />
-                    ) : null}
-
-                    <Panel title="Lampiran">
-                        {letter.attachments?.length ? (
-                            <div className="space-y-3">
-                                {letter.attachments.map((attachment) => (
-                                    <a
-                                        key={attachment.id}
-                                        href={`/storage/${attachment.file_path}`}
-                                        target="_blank"
-                                        className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3 text-sm hover:border-emerald-300"
-                                        rel="noreferrer"
-                                    >
-                                        <span className="flex items-center gap-2 font-medium text-gray-900">
-                                            <Paperclip className="h-4 w-4 text-gray-500" />
-                                            {attachment.file_name}
-                                        </span>
-                                        <Download className="h-4 w-4 text-gray-500" />
-                                    </a>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-sm text-gray-500">
-                                Tidak ada lampiran scan.
-                            </div>
-                        )}
-                    </Panel>
-
-                    {!["internal", "outgoing"].includes(businessType) ? <Panel title="Disposisi">
-                        {dispositionTree.length ? (
-                            <div className="space-y-3">
-                                {dispositionTree.map((disposition) => (
-                                    <DispositionThreadItem
-                                        key={disposition.id}
-                                        disposition={disposition}
-                                        targetOptions={targetOptions}
-                                        dispositionTargetOptions={dispositionTargetOptions}
-                                        targetTypes={dispositionTypes}
-                                        letterId={letter.id}
-                                    />
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-sm text-gray-500">
-                                Belum ada disposisi.
-                            </div>
-                        )}
-                    </Panel> : null}
-                </div>
-
-                <div className="space-y-5 xl:col-span-5">
-                    <Panel title="Preview Surat">
-                        {currentVersionPath ? (
-                            <iframe
-                                title="Preview PDF"
-                                src={`/storage/${currentVersionPath}`}
-                                className="h-[520px] md:h-[680px] w-full rounded-lg border border-gray-200 bg-gray-100"
-                            />
-                        ) : (
-                            <div className="text-sm text-gray-500">
-                                Preview tidak tersedia.
-                            </div>
-                        )}
-                    </Panel>
-
-                    <Panel title="Status Baca">
-                        {readStatuses.length ? (
-                            <div className="space-y-3">
-                                {readStatuses.map((receipt) => (
-                                    <div
-                                        key={receipt.id || receipt.user?.id}
-                                        className="flex items-center justify-between gap-3 text-sm"
-                                    >
-                                        <div>
-                                            <div className="font-semibold text-gray-950">
-                                                {receipt.user?.name || "-"}
-                                            </div>
-                                            <div className="text-xs text-gray-500">
-                                                {receipt.user?.position || "-"}
-                                            </div>
-                                        </div>
-                                        <Pill tone="green">
-                                            {formatDate(receipt.read_at)}
-                                        </Pill>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-sm text-gray-500">
-                                Belum ada penerima yang membaca.
-                            </div>
-                        )}
-                    </Panel>
-
                 </div>
             </div>
         </>
@@ -1873,10 +1310,9 @@ function DetailPage() {
 }
 
 function ApprovalHistoryPanel({ letter }) {
-    const versions = letter.document_versions || [];
-    const fallbackRequests = letter.signature_requests || [];
+    const requests = letter.signature_requests || [];
 
-    if (!versions.length && !fallbackRequests.length) {
+    if (!requests.length) {
         return (
             <Panel title="Approval Dokumen">
                 <div className="text-sm text-gray-500">Belum ada approval dokumen.</div>
@@ -1886,116 +1322,25 @@ function ApprovalHistoryPanel({ letter }) {
 
     return (
         <Panel title="Approval Dokumen">
-            <div className="space-y-4">
-                {versions.length ? versions.map((version) => (
-                    <ApprovalVersionBlock key={version.id} version={version} currentVersionId={letter.current_version_id} />
-                )) : (
-                    <ApprovalVersionBlock version={{ version_number: 1, signature_requests: fallbackRequests }} currentVersionId={letter.current_version_id} />
-                )}
-            </div>
-        </Panel>
-    );
-}
-
-function ApprovalVersionBlock({ version, currentVersionId }) {
-    const requests = version.signature_requests || [];
-
-    return (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-semibold text-gray-950">
-                    Versi {version.version_number || 1}
-                </div>
-                {String(currentVersionId || "") === String(version.id || "") ? <Pill tone="blue">Aktif</Pill> : null}
-            </div>
-            {requests.length ? (
-                <div className="space-y-3">
-                    {requests.map((request) => {
-                        const status = signatureStatusMeta(request.status);
-                        const type = approvalTypeMeta(request);
-
-                        return (
-                            <div key={request.id} className="rounded-lg border border-gray-200 bg-white p-3 text-sm">
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                    <div>
-                                        <div className="font-semibold text-gray-950">
-                                            {type.label} {request.signing_order}: {request.signer?.name || "-"}
-                                        </div>
-                                        {request.approval_type === "paraf" ? (
-                                            <div className="mt-1 text-xs text-gray-500">Approval sistem tanpa QR.</div>
-                                        ) : (
-                                            <div className="mt-1 text-xs text-gray-500">
-                                                Halaman {request.page_number} · Posisi {(Number(request.x) * 100).toFixed(1)}%, {(Number(request.y) * 100).toFixed(1)}%
-                                            </div>
-                                        )}
-                                    </div>
-                                    <Pill tone={status.tone}>{status.label}</Pill>
-                                </div>
-                                <div className="mt-2 text-xs text-gray-500">
-                                    {request.signed_at ? `Disetujui ${formatDate(request.signed_at)}` : request.rejected_at ? `Ditolak ${formatDate(request.rejected_at)}` : `Dibuat ${formatDate(request.created_at)}`}
-                                </div>
-                                {request.note ? (
-                                    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                                        Catatan: {request.note}
-                                    </div>
-                                ) : null}
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : (
-                <div className="text-sm text-gray-500">Tidak ada approval pada versi ini.</div>
-            )}
-        </div>
-    );
-}
-
-function DocumentVersionHistory({ letter }) {
-    const versions = letter.document_versions || [];
-
-    if (!versions.length) return null;
-
-    return (
-        <Panel title="Riwayat Versi Dokumen">
             <div className="space-y-3">
-                {versions.map((version) => {
-                    const status = {
-                        active: { label: "Aktif", tone: "blue" },
-                        signed: { label: "Signed", tone: "green" },
-                        rejected: { label: "Ditolak", tone: "red" },
-                        superseded: { label: "Diganti", tone: "gray" },
-                    }[version.status] || { label: version.status || "-", tone: "gray" };
+                {requests.map((request) => {
+                    const type = approvalTypeMeta(request);
 
                     return (
-                        <div key={version.id} className="rounded-lg border border-gray-200 px-4 py-3 text-sm">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div key={request.id} className="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
                                     <div className="font-semibold text-gray-950">
-                                        Versi {version.version_number}
+                                        {type.label} {request.signing_order}: {request.signer?.name || "-"}
                                     </div>
                                     <div className="mt-1 text-xs text-gray-500">
-                                        Diupload oleh {version.uploader?.name || "-"} · {formatDate(version.created_at)}
+                                        Halaman {request.page_number} · Posisi {(Number(request.x) * 100).toFixed(1)}%, {(Number(request.y) * 100).toFixed(1)}%
                                     </div>
                                 </div>
-                                <Pill tone={status.tone}>{status.label}</Pill>
                             </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                                <a href={`/storage/${version.source_pdf_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-emerald-300">
-                                    <Download className="mr-2 h-3.5 w-3.5" />
-                                    PDF Sumber
-                                </a>
-                                {version.signed_pdf_path ? (
-                                    <a href={`/storage/${version.signed_pdf_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
-                                        <Download className="mr-2 h-3.5 w-3.5" />
-                                        PDF Signed
-                                    </a>
-                                ) : null}
+                            <div className="mt-2 text-xs text-gray-500">
+                                {request.signed_at ? `Ditandatangani ${formatDate(request.signed_at)}` : `Dibuat ${formatDate(request.created_at)}`}
                             </div>
-                            {version.rejection_note ? (
-                                <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
-                                    Ditolak oleh {version.rejector?.name || "-"} pada {formatDate(version.rejected_at)}: {version.rejection_note}
-                                </div>
-                            ) : null}
                         </div>
                     );
                 })}
@@ -2005,23 +1350,12 @@ function DocumentVersionHistory({ letter }) {
 }
 
 function normalizeRevisionRequests(requests) {
-    const grouped = [
-        ...requests.filter((request) => request.approval_type === "paraf"),
-        ...requests.filter((request) => (request.approval_type || "signature") === "signature"),
-    ];
-    let signatureNumber = 0;
-
-    return grouped.map((request, index) => {
-        const isSignatureRequest = (request.approval_type || "signature") === "signature";
-        if (isSignatureRequest) signatureNumber += 1;
-
-        return {
-            ...request,
-            approval_type: request.approval_type || "signature",
-            signing_order: index + 1,
-            signature_number: isSignatureRequest ? signatureNumber : null,
-        };
-    });
+    return requests.map((request, index) => ({
+        ...request,
+        approval_type: "signature",
+        signing_order: index + 1,
+        signature_number: index + 1,
+    }));
 }
 
 function RevisionUploadPanel({ letter, targetOptions }) {
@@ -2048,18 +1382,6 @@ function RevisionUploadPanel({ letter, targetOptions }) {
         }
         form.setData("scan_file", file);
         setPdfPreviewUrl(URL.createObjectURL(file));
-    };
-
-    const addParaf = () => {
-        const signer = (targetOptions.users || [])[0];
-        form.setData("signature_requests", normalizeRevisionRequests([
-            ...form.data.signature_requests,
-            {
-                local_id: `${Date.now()}-${form.data.signature_requests.length}`,
-                approval_type: "paraf",
-                signer_user_id: signer?.id || "",
-            },
-        ]));
     };
 
     const addSignature = (placement) => {
@@ -2103,14 +1425,14 @@ function RevisionUploadPanel({ letter, targetOptions }) {
 
     const submit = (event) => {
         event.preventDefault();
-        form.post(`/pegawai/surat/${letter.id}/revisi-pdf`, { preserveScroll: true });
+        form.post(`/user/surat/${letter.id}/revisi-pdf`, { preserveScroll: true });
     };
 
     return (
         <Panel title="Upload PDF Revisi">
             <form onSubmit={submit} className="space-y-4">
                 <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-                    Approval dokumen ditolak. Upload PDF terbaru untuk menjalankan ulang workflow approval.
+                    Tanda tangan dokumen ditolak. Upload PDF terbaru untuk menjalankan ulang alur tanda tangan.
                 </div>
                 <label className="block text-sm font-semibold text-gray-900">
                     PDF revisi
@@ -2123,14 +1445,14 @@ function RevisionUploadPanel({ letter, targetOptions }) {
                     {form.errors.scan_file ? <span className="mt-1 block text-xs text-red-600">{form.errors.scan_file}</span> : null}
                 </label>
                 <label className="block text-sm font-semibold text-gray-900">
-                    Alur approval
+                    Alur tanda tangan
                     <select
                         value={form.data.revision_flow}
                         onChange={(event) => form.setData({ ...form.data, revision_flow: event.target.value, signature_requests: [] })}
                         className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
                     >
-                        <option value="reuse">Gunakan alur approval sebelumnya</option>
-                        <option value="reset">Atur ulang paraf/tanda tangan</option>
+                        <option value="reuse">Gunakan alur tanda tangan sebelumnya</option>
+                        <option value="reset">Atur ulang tanda tangan</option>
                     </select>
                 </label>
 
@@ -2140,7 +1462,6 @@ function RevisionUploadPanel({ letter, targetOptions }) {
                             requests={form.data.signature_requests}
                             signerOptions={targetOptions.users || []}
                             errors={form.errors}
-                            onAddParaf={addParaf}
                             onUpdate={updateRequest}
                             onRemove={removeRequest}
                             onMove={moveRequest}
@@ -2153,8 +1474,9 @@ function RevisionUploadPanel({ letter, targetOptions }) {
                                 fileUrl={pdfPreviewUrl}
                                 requests={form.data.signature_requests}
                                 placementActive={signaturePlacementActive}
-                                onPlace={addSignature}
-                                onMove={(localId, placement) => updateRequest(localId, placement)}
+                                onAdd={addSignature}
+                                onUpdate={updateRequest}
+                                onPlacementComplete={() => setSignaturePlacementActive(false)}
                             />
                         ) : (
                             <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
@@ -2218,7 +1540,7 @@ function PublishExternalPanel({ letter, targetOptions }) {
 
     const submit = (event) => {
         event.preventDefault();
-        form.post(`/pegawai/surat/${letter.id}/publish`, {
+        form.post(`/user/surat/${letter.id}/publish`, {
             preserveScroll: true,
             onSuccess: () => form.reset("targets"),
         });
@@ -2227,7 +1549,7 @@ function PublishExternalPanel({ letter, targetOptions }) {
     const revokeTarget = (target) => {
         if (!confirm("Cabut publish ke target ini?")) return;
 
-        router.delete(`/pegawai/surat/${letter.id}/publish/${target.id}`, {
+        router.delete(`/user/surat/${letter.id}/publish/${target.id}`, {
             preserveScroll: true,
         });
     };
@@ -2301,14 +1623,14 @@ function DispositionThreadItem({ disposition, targetOptions, dispositionTargetOp
     });
     const submitReply = (event) => {
         event.preventDefault();
-        replyForm.post(`/pegawai/disposisi/${disposition.id}/balas`, {
+        replyForm.post(`/user/disposisi/${disposition.id}/balas`, {
             preserveScroll: true,
             onSuccess: () => replyForm.reset("note"),
         });
     };
     const submitForward = (event) => {
         event.preventDefault();
-        forwardForm.post(`/pegawai/surat/${letterId}/disposisi`, {
+        forwardForm.post(`/user/surat/${letterId}/disposisi`, {
             preserveScroll: true,
             onSuccess: () => forwardForm.reset("target_id", "note"),
         });
@@ -2325,11 +1647,6 @@ function DispositionThreadItem({ disposition, targetOptions, dispositionTargetOp
                         <div className="mt-1 text-xs font-medium text-gray-500">
                             Tujuan: {targetLabel(disposition, targetOptions)}
                         </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <Pill tone={disposition.read_at ? "green" : "gray"}>
-                            {disposition.read_at ? "Dibaca" : "Belum dibaca"}
-                        </Pill>
                     </div>
                 </div>
                 <div className="mt-3 text-gray-700">{disposition.note || "-"}</div>
@@ -2543,7 +1860,7 @@ function ArchivePage() {
             params.delete("category");
         }
 
-        return `/pegawai/arsip${params.toString() ? `?${params.toString()}` : ""}`;
+        return `/user/arsip${params.toString() ? `?${params.toString()}` : ""}`;
     }
 
     return (
@@ -2573,9 +1890,8 @@ function ArchivePage() {
             </div>
             <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                 <Search
-                    URL={`/pegawai/arsip${currentCategory ? `?category=${currentCategory}` : ""}`}
+                    URL={`/user/arsip${currentCategory ? `?category=${currentCategory}` : ""}`}
                     filters={[
-                        { key: "letter_type_ids", label: "Jenis Surat", options: filterOptions.letterTypes || [] },
                         { key: "creator_ids", label: "Pembuat", options: filterOptions.users || [] },
                     ]}
                 />
@@ -2585,63 +1901,6 @@ function ArchivePage() {
                 emptyText="Arsip pribadi masih kosong."
                 context="archive"
             />
-        </>
-    );
-}
-
-function NotificationsPage() {
-    const { notifications } = usePage().props;
-    const rows = collection(notifications);
-
-    return (
-        <>
-            <Header
-                title="Notifikasi"
-                description="Notifikasi surat dan disposisi untuk akun Anda."
-            />
-            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                <div className="divide-y divide-gray-100">
-                    {rows.length ? (
-                        rows.map((notification) => (
-                            <Link
-                                key={notification.id}
-                                href={`/pegawai/notifikasi/${notification.id}`}
-                                className="grid gap-3 px-5 py-4 text-sm hover:bg-gray-50 md:grid-cols-12 md:items-center"
-                            >
-                                <div className="min-w-0 md:col-span-7">
-                                    <div className="flex items-center gap-2">
-                                        {!notification.read_at ? (
-                                            <span className="h-2 w-2 rounded-full bg-red-600" />
-                                        ) : (
-                                            <Bell className="h-4 w-4 text-gray-400" />
-                                        )}
-                                        <div className="font-semibold text-gray-950">
-                                            {notification.title}
-                                        </div>
-                                    </div>
-                                    <div className="mt-1 break-words text-gray-600">
-                                        {notification.body || "-"}
-                                    </div>
-                                </div>
-                                <div className="text-gray-600 md:col-span-3">
-                                    {letterDisplayNumber(notification.letter)}
-                                </div>
-                                <div className="md:col-span-2 md:text-right">
-                                    <Pill tone={notification.read_at ? "green" : "red"}>
-                                        {notification.read_at ? "Dibaca" : "Belum dibaca"}
-                                    </Pill>
-                                    <div className="mt-2 text-xs text-gray-500">
-                                        {formatDate(notification.created_at)}
-                                    </div>
-                                </div>
-                            </Link>
-                        ))
-                    ) : (
-                        <EmptyState message="Belum ada notifikasi." />
-                    )}
-                </div>
-                <Pagination meta={notifications} />
-            </div>
         </>
     );
 }
@@ -2846,10 +2105,10 @@ function TextareaField({
 function Panel({ title, children }) {
     return (
         <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 px-5 py-4 text-sm font-semibold text-gray-950">
+            <div className="border-b border-gray-200 px-4 py-3 text-sm font-semibold text-gray-950 sm:px-5 sm:py-4">
                 {title}
             </div>
-            <div className="p-5">{children}</div>
+            <div className="p-4 sm:p-5">{children}</div>
         </section>
     );
 }
@@ -3038,20 +2297,19 @@ function cleanUnitName(name, prefix) {
 
 export default function Workspace() {
     const { section, mode } = usePage().props;
-    const title = section === "detail" ? "Detail Surat" : "Portal Pegawai";
+    const title = section === "detail" ? "Detail Dokumen" : "Portal User";
 
     return (
-        <LayoutPegawai>
+        <LayoutUser>
             <Head title={title} />
             {section === "dashboard" ? <Dashboard /> : null}
             {section === "inbox" ? <InboxPage mode={mode} /> : null}
-            {section === "create_menu" ? <CreateMenuPage /> : null}
+            {section === "documents" ? <ApprovalPage /> : null}
             {section === "create" ? <CreatePage /> : null}
             {section === "archive" ? <ArchivePage /> : null}
             {section === "approval" ? <ApprovalPage /> : null}
             {section === "approval_detail" ? <ApprovalDetailPage /> : null}
-            {section === "notifications" ? <NotificationsPage /> : null}
             {section === "detail" ? <DetailPage /> : null}
-        </LayoutPegawai>
+        </LayoutUser>
     );
 }

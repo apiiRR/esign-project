@@ -7,7 +7,6 @@ import Pagination from "@/Shared/Pagination";
 import Delete from "@/Shared/Delete";
 import { appName, companyName } from "@/Utils/appIdentity";
 import {
-    Building2,
     Download,
     Edit,
     FileDown,
@@ -20,7 +19,7 @@ import {
 } from "lucide-react";
 
 function roleLabel(user) {
-    return user.role || (user.roles?.length ? user.roles.map((role) => role.name).join(", ") : "pegawai");
+    return user.roles?.length ? user.roles.map((role) => role.name).join(", ") : (user.role || "user");
 }
 
 export default function UsersIndex() {
@@ -93,12 +92,11 @@ export default function UsersIndex() {
                         </div>
                     ) : null}
 
-                    <div className="grid gap-4 md:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-3">
                         {[
                             ["Total User", users?.total || rows.length, Users],
                             ["Role Admin", rows.filter((user) => roleLabel(user).includes("admin")).length, Shield],
-                            ["Pegawai Aktif", rows.filter((user) => user.role === "pegawai" && user.status === "active").length, UserCheck],
-                            ["Unit Organisasi", new Set(rows.map((user) => user.department_id).filter(Boolean)).size, Building2],
+                            ["User Aktif", rows.filter((user) => !roleLabel(user).includes("admin") && user.status === "active").length, UserCheck],
                         ].map(([label, value, Icon]) => (
                             <div key={label} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                                 <Icon className="h-5 w-5 text-emerald-700" />
@@ -112,16 +110,47 @@ export default function UsersIndex() {
                         <Search URL="/admin/users" filters={[
                             { key: "roles", label: "Role", options: filterOptions.roles || [] },
                             { key: "statuses", label: "Status", options: filterOptions.statuses || [] },
-                            { key: "directorate_ids", label: "Direktorat", options: filterOptions.directorates || [] },
-                            { key: "division_ids", label: "Divisi", options: filterOptions.divisions || [] },
-                            { key: "department_ids", label: "Department", options: filterOptions.departments || [] },
                         ]} />
 
-                        <div className="mt-5 overflow-x-auto rounded-lg border border-gray-200">
+                        <div className="mt-5 grid gap-3 md:hidden">
+                            {rows.length ? rows.map((user) => (
+                                <div key={user.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                                    <div className="flex min-w-0 items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white">
+                                            {(user.name || "U").slice(0, 1)}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="break-words text-sm font-semibold text-gray-950">{user.name}</div>
+                                            <div className="mt-1 break-words text-xs text-gray-500">{user.email || "-"}</div>
+                                            <div className="mt-1 break-words text-xs text-gray-500">username: {user.username}</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{roleLabel(user)}</span>
+                                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${user.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{user.status === "active" ? "Aktif" : "Nonaktif"}</span>
+                                    </div>
+                                    <div className="mt-3 text-sm text-gray-700">
+                                        <span className="font-semibold">Posisi:</span> {user.position || "-"}
+                                    </div>
+                                    <div className="mt-4 flex gap-2">
+                                        {hasAnyPermission(["users.edit"]) ? (
+                                            <Link href={`/admin/users/${user.id}/edit`} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-600">
+                                                <Edit className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </Link>
+                                        ) : null}
+                                        {hasAnyPermission(["users.delete"]) ? <Delete URL="/admin/users" id={user.id} /> : null}
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">Belum ada user.</div>
+                            )}
+                        </div>
+                        <div className="mt-5 hidden overflow-x-auto rounded-lg border border-gray-200 md:block">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                     <tr>
-                                        {["User", "Role Akses", "Organisasi", "Jabatan", "Status", "Last Login", "Aksi"].map((column) => (
+                                        {["User", "Role Akses", "Posisi", "Status", "Last Login", "Aksi"].map((column) => (
                                             <th key={column} className="px-5 py-3 text-left text-xs font-semibold uppercase text-gray-600">
                                                 {column}
                                             </th>
@@ -152,10 +181,6 @@ export default function UsersIndex() {
                                                         {roleLabel(user)}
                                                     </span>
                                                 </td>
-                                                <td className="px-5 py-4 text-sm text-gray-700">
-                                                    <div className="font-medium text-gray-900">{user.directorate?.name || "-"}</div>
-                                                    <div className="text-xs text-gray-500">{user.division?.name || "-"} · {user.department?.name || "-"}</div>
-                                                </td>
                                                 <td className="px-5 py-4 text-sm text-gray-700">{user.position || "-"}</td>
                                                 <td className="px-5 py-4">
                                                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${user.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-600"}`}>
@@ -177,7 +202,7 @@ export default function UsersIndex() {
                                         );
                                     }) : (
                                         <tr>
-                                            <td colSpan="7" className="px-5 py-12 text-center">
+                                            <td colSpan="6" className="px-5 py-12 text-center">
                                                 <div className="font-semibold text-gray-900">Belum ada user</div>
                                                 <div className="mt-1 text-sm text-gray-500">Tambahkan user perusahaan untuk mulai mengatur akses.</div>
                                             </td>

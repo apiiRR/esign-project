@@ -7,7 +7,7 @@
 Controller sederhana untuk halaman dokumentasi:
 
 - `admin()`: render dokumentasi admin.
-- `pegawai()`: render dokumentasi pegawai.
+- `user()`: render dokumentasi user.
 - `developer()`: render dokumentasi developer publik.
 
 ### `Admin\Auth\LoginController`
@@ -72,7 +72,7 @@ CRUD master organisasi.
 
 ### `Admin\UserController`
 
-CRUD user admin/pegawai.
+CRUD user admin/user.
 
 - `index()`: daftar user dengan filter.
 - `create()`: form user.
@@ -107,14 +107,14 @@ CRUD jenis surat:
 
 CRUD permission dan role berbasis package Spatie Permission.
 
-## Controller Pegawai: `PortalController`
+## Controller User: `PortalController`
 
-`PortalController` adalah controller terbesar untuk portal pegawai.
+`PortalController` adalah controller terbesar untuk portal user.
 
 ### Rendering halaman
 
 - `workspace(Request, string $section, ?string $mode)`
-  Mengembalikan halaman `Pegawai/Portal/Workspace` dengan props sesuai section:
+  Mengembalikan halaman `User/Portal/Workspace` dengan props sesuai section:
   dashboard, inbox, disposisi, archive, notifications, create, detail.
 
 - `detail(Request, Letter, DispositionService)`
@@ -141,7 +141,7 @@ CRUD permission dan role berbasis package Spatie Permission.
 ### Nomor surat
 
 - `makeReference(string $mode)`
-  Membuat ID internal seperti `BDK-INT`, `BDK-OUT`, `BDK-EXT`, atau `BDK-ARS`.
+  Membuat ID teknis internal berbasis UUID.
 
 ### Draft dan lampiran
 
@@ -194,10 +194,10 @@ CRUD permission dan role berbasis package Spatie Permission.
 ### Akses dan query
 
 - `baseProps(User)`
-  Props global portal pegawai: badge, letter types, target options, filter options.
+  Props global portal user: badge, letter types, target options, filter options.
 
 - `dashboardStats(User)`
-  Statistik dashboard pegawai.
+  Statistik dashboard user.
 
 - `accessibleLetters(User, ?string $kind, bool $includeCreated)`
   Query surat internal yang bisa diakses berdasarkan target recipient/cc.

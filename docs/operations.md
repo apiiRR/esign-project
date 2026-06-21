@@ -42,7 +42,7 @@ npm run dev
 Lint PHP file tertentu:
 
 ```bash
-php -l app/Http/Controllers/Pegawai/PortalController.php
+php -l app/Http/Controllers/User/PortalController.php
 ```
 
 Build frontend:
@@ -206,12 +206,7 @@ docker compose --env-file .env.production -f docker-compose.prod.yml logs -f que
 
 Nomor publik disimpan di `letters.letter_number`.
 
-Reference internal disimpan di `letters.reference`, contoh:
-
-- `BDK-INT-...`
-- `BDK-OUT-...`
-- `BDK-EXT-...`
-- `BDK-ARS-...`
+Reference internal disimpan di `letters.reference` sebagai ID teknis berbasis UUID.
 
 Reference dipakai untuk kebutuhan internal seperti path file dan relasi lama. UI sebaiknya menampilkan `letter_number`, bukan `reference`, kecuali memang sedang menampilkan ID internal untuk debugging.
 

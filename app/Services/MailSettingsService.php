@@ -6,6 +6,7 @@ use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -13,20 +14,25 @@ class MailSettingsService
 {
     public function setting(): Setting
     {
-        return Setting::query()->firstOrCreate([], [
+        $defaults = [
             'app_name' => 'Surat dan Arsip Digital Berdikari',
             'company_name' => 'PT Berdikari',
             'company_code' => 'BDRK',
             'letter_field_requirements' => app(LetterFieldRequirementService::class)->defaults(),
-        ]);
+        ];
+
+        if (Schema::hasTable('settings') && Schema::hasColumn('settings', 'document_download_otp_scope')) {
+            $defaults['document_download_otp_scope'] = 'both';
+        }
+
+        return Setting::query()->firstOrCreate([], $defaults);
     }
 
     public function canSendMail(?Setting $setting = null): bool
     {
         $setting ??= $this->setting();
 
-        return (bool) $setting->mail_notifications_enabled
-            && filled($setting->mail_host)
+        return filled($setting->mail_host)
             && filled($setting->mail_port)
             && filled($setting->mail_from_address);
     }
@@ -47,7 +53,7 @@ class MailSettingsService
 
         if (! $this->canSendMail($setting)) {
             if ($throw) {
-                throw ValidationException::withMessages(['email' => 'Konfigurasi SMTP belum lengkap atau email notifikasi belum aktif.']);
+                throw ValidationException::withMessages(['email' => 'Konfigurasi SMTP belum lengkap.']);
             }
 
             return false;
@@ -92,6 +98,7 @@ class MailSettingsService
             'mail.mailers.smtp.username' => $setting->mail_username,
             'mail.mailers.smtp.password' => $setting->mail_password,
             'mail.mailers.smtp.scheme' => $scheme,
+            'mail.mailers.smtp.timeout' => (int) env('MAIL_TIMEOUT', 10),
             'mail.from.address' => $setting->mail_from_address,
             'mail.from.name' => $setting->mail_from_name ?: $setting->app_name,
         ]);

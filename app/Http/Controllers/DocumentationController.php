@@ -11,11 +11,6 @@ class DocumentationController extends Controller
         return inertia('Admin/Documentation/Index');
     }
 
-    public function pegawai()
-    {
-        return inertia('Pegawai/Documentation/Index');
-    }
-
     public function developer()
     {
         return inertia('Public/DeveloperDocs');

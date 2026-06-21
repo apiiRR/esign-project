@@ -59,12 +59,12 @@ Relasi:
 
 ### `users`
 
-Menyimpan akun admin dan pegawai.
+Menyimpan akun admin dan user.
 
 Field penting:
 
 - `username`, `name`, `email`, `password`.
-- `role`: admin atau pegawai.
+- `role`: admin atau user.
 - `directorate_id`, `division_id`, `department_id`: posisi organisasi user saat ini.
 - `position`: label jabatan.
 - `status`: active/inactive.
@@ -112,7 +112,7 @@ Field penting:
 - `origin_directorate_id`, `origin_division_id`, `origin_department_id`.
 - `title`, `subject`.
 - `letter_number`: nomor publik yang seharusnya ditampilkan ke user.
-- `reference`: ID internal aplikasi, contoh `BDK-OUT-...`.
+- `reference`: ID teknis internal aplikasi berbasis UUID.
 - `page_count`.
 - `status`: draft, sent, received, disposed, archived, rejected.
 - `payload`: metadata tambahan.
@@ -211,7 +211,7 @@ Field penting:
 - `from_directorate_id`, `from_division_id`, `from_department_id`: snapshot unit pengirim.
 - `target_type`, `target_id`: target unit/jabatan.
 - `note`.
-- `status`: masih ada untuk kompatibilitas data, tetapi UI pegawai tidak memakai Diproses/Selesai.
+- `status`: masih ada untuk kompatibilitas data, tetapi UI user tidak memakai Diproses/Selesai.
 - `read_at`: kapan target membuka disposisi.
 - `completed_at`: kompatibilitas data lama.
 

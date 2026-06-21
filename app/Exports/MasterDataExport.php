@@ -141,7 +141,7 @@ class MasterDataExport implements FromCollection, WithHeadings
             'directorates' => ['DIR-OPS', 'Direktorat Operasional', 'direktur.ops', 'active'],
             'divisions' => ['DIV-HCGA', 'Human Capital & General Affair', 'DIR-OPS', '', 'gm.hcga', 'active'],
             'departments' => ['DEPT-IT', 'Information Technology', 'DIV-HCGA', '', 'manager.it', 'active'],
-            'users' => ['rafi', 'Rafi Ahmad', 'rafi@example.com', 'password123', 'pegawai', 'DIR-OPS', '', 'DIV-HCGA', '', 'DEPT-IT', '', 'Staff', 'active'],
+            'users' => ['rafi', 'Rafi Ahmad', 'rafi@example.com', 'password123', 'user', 'DIR-OPS', '', 'DIV-HCGA', '', 'DEPT-IT', '', 'Staff', 'active'],
             default => [],
         };
     }

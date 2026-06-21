@@ -91,9 +91,9 @@ Dokumen ini adalah indeks cepat untuk mencari fungsi controller.
 - `update(Request, Role)`
 - `destroy(Role)`
 
-## Pegawai
+## User
 
-### `Pegawai\PortalController`
+### `User\PortalController`
 
 Rendering dan dashboard:
 

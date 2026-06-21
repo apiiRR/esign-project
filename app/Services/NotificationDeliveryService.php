@@ -3,8 +3,7 @@
 namespace App\Services;
 
 use App\Models\Letter;
-use App\Models\NotificationLog;
-use App\Models\Setting;
+use App\Models\LetterSignatureRequest;
 use App\Models\User;
 
 class NotificationDeliveryService
@@ -13,101 +12,59 @@ class NotificationDeliveryService
     {
     }
 
-    public function letter(int|User $user, ?Letter $letter, string $title, ?string $body = null): NotificationLog
+    public function letter(int|User $user, ?Letter $letter, string $title, ?string $body = null): null
     {
-        return $this->deliver($user, $letter, $title, $body, 'letter', 'surat_tujuan');
+        return $this->deliver();
     }
 
-    public function letterCc(int|User $user, ?Letter $letter, string $title, ?string $body = null): NotificationLog
+    public function letterCc(int|User $user, ?Letter $letter, string $title, ?string $body = null): null
     {
-        return $this->deliver($user, $letter, $title, $body, 'letter', 'surat_tebusan');
+        return $this->deliver();
     }
 
-    public function publish(int|User $user, ?Letter $letter, string $title, ?string $body = null): NotificationLog
+    public function publish(int|User $user, ?Letter $letter, string $title, ?string $body = null): null
     {
-        return $this->deliver($user, $letter, $title, $body, 'letter', 'surat_publish');
+        return $this->deliver();
     }
 
-    public function disposition(int|User $user, ?Letter $letter, string $title, ?string $body = null, array $context = []): NotificationLog
+    public function disposition(int|User $user, ?Letter $letter, string $title, ?string $body = null, array $context = []): null
     {
-        return $this->deliver($user, $letter, $title, $body, 'letter', 'disposisi', $context);
+        return $this->deliver();
     }
 
-    public function signature(int|User $user, ?Letter $letter, string $title, ?string $body = null): NotificationLog
+    public function signature(int|User $user, ?Letter $letter, string $title, ?string $body = null): null
     {
-        return $this->deliver($user, $letter, $title, $body, 'signature', 'approval_tte');
-    }
+        $recipient = $user instanceof User ? $user : User::query()->find($user);
 
-    private function deliver(int|User $user, ?Letter $letter, string $title, ?string $body, string $type, string $templateType, array $context = []): NotificationLog
-    {
-        $targetUser = $user instanceof User
-            ? $user
-            : User::query()->find($user);
+        if (! $recipient || ! $letter) {
+            return null;
+        }
 
-        $notification = NotificationLog::query()->create([
-            'user_id' => $targetUser?->id,
-            'letter_id' => $letter?->id,
-            'channel' => 'web',
-            'title' => $title,
-            'body' => $body,
-            'sent_at' => now(),
+        $request = LetterSignatureRequest::query()
+            ->where('letter_id', $letter->id)
+            ->where('signer_user_id', $recipient->id)
+            ->where('status', 'ready')
+            ->latest('id')
+            ->first();
+
+        $number = $letter->letter_number ?: 'dokumen';
+        $url = $request ? url('/user/approval/' . $request->id) : url('/user/dashboard');
+        $message = $body ?: "Ada dokumen yang perlu Anda tanda tangani: {$number}.";
+        $message .= "\n\nPerihal: " . ($letter->subject ?: $letter->title ?: '-');
+        $message .= "\nLink: {$url}";
+
+        $sent = $this->mailSettings->sendRaw($recipient, $title, $message);
+
+        app(AuditTrailService::class)->log(null, $recipient, 'email', $sent ? 'signature_email_sent' : 'signature_email_failed', $sent ? 'Email tanda tangan dikirim.' : 'Email tanda tangan gagal dikirim.', $letter, [
+            'signature_request_id' => $request?->id,
+            'recipient_email' => $recipient->email,
         ]);
 
-        if ($targetUser && $this->shouldSendEmail($type)) {
-            [$subject, $emailBody] = $this->renderEmail($targetUser, $letter, $title, $body, $templateType, $context);
-            $this->mailSettings->sendRaw($targetUser, $subject, $emailBody);
-        }
-
-        return $notification;
+        return null;
     }
 
-    private function renderEmail(User $recipient, ?Letter $letter, string $title, ?string $body, string $templateType, array $context): array
+    private function deliver(): null
     {
-        /** @var Setting $setting */
-        $setting = $this->mailSettings->setting();
-        $templates = $setting->mailTemplatesWithDefaults();
-        $template = $templates[$templateType] ?? [];
-        $number = $letter ? ($letter->letter_number ?: $letter->reference) : '-';
-        $letterType = $letter ? match (($letter->meta['mode'] ?? null) === 'archive' ? 'archive' : $letter->type) {
-            'incoming_external' => 'Surat Masuk Eksternal',
-            'internal' => 'Surat Internal',
-            'outgoing' => 'Surat Keluar',
-            'archive' => 'Arsip',
-            default => 'Surat',
-        } : '-';
-
-        $replacements = [
-            '{app_name}' => $setting->app_name,
-            '{recipient_name}' => $recipient->name,
-            '{sender_name}' => $context['sender_name'] ?? '-',
-            '{letter_number}' => $number,
-            '{letter_subject}' => $letter?->subject ?: ($letter?->title ?: '-'),
-            '{letter_type}' => $letterType,
-            '{disposition_note}' => $context['disposition_note'] ?? ($body ?: '-'),
-            '{action_url}' => $letter ? url('/pegawai/surat/' . $letter->id) : url('/pegawai'),
-        ];
-
-        $subject = trim((string) ($template['subject'] ?? '')) ?: $title;
-        $emailBody = trim((string) ($template['body'] ?? '')) ?: implode("\n", [$title, '', $body ?: '-', '', 'Nomor surat: ' . $number]);
-
-        return [
-            strtr($subject, $replacements),
-            strtr($emailBody, $replacements),
-        ];
-    }
-
-    private function shouldSendEmail(string $type): bool
-    {
-        /** @var Setting $setting */
-        $setting = $this->mailSettings->setting();
-
-        if (! $setting->mail_notifications_enabled) {
-            return false;
-        }
-
-        return match ($type) {
-            'signature' => (bool) $setting->mail_signature_approval_notifications_enabled,
-            default => (bool) $setting->mail_letter_notifications_enabled,
-        };
+        return null;
     }
 }

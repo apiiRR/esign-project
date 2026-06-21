@@ -120,10 +120,10 @@ export default function LayoutAdmin({ children }) {
         <div className="min-h-screen bg-gray-200">
             {/* Top Navigation */}
             <nav className="sticky top-0 z-50 bg-white shadow-sm">
-                <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+                <div className="px-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="flex justify-between h-16">
                         {/* Left Section: Logo & Desktop Menu */}
-                        <div className="flex items-center">
+                        <div className="flex min-w-0 items-center">
                             <Logo />
                             
                             <div ref={dropdownRef} className="hidden ml-10 sm:flex sm:space-x-1">
@@ -136,7 +136,7 @@ export default function LayoutAdmin({ children }) {
                         </div>
 
                         {/* Right Section: Notifications & User */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                             
                             <div ref={userDropdownRef}>
                                 <UserDropdown
@@ -177,8 +177,8 @@ export default function LayoutAdmin({ children }) {
             </nav>
 
             {/* Main Content */}
-            <main className="py-8">
-                 <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+            <main className="py-4 sm:py-8">
+                 <div className="px-3 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     {children}
                 </div>
             </main>

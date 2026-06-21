@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin\Auth;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Http\Controllers\Controller;
+use App\Services\AuditTrailService;
 
 class LoginController extends Controller
 {    
@@ -25,7 +26,7 @@ class LoginController extends Controller
      * @param  mixed $request
      * @return void
      */
-    public function store(Request $request)
+    public function store(Request $request, AuditTrailService $auditTrail)
     {
         // set validation
         $request->validate([
@@ -50,13 +51,18 @@ class LoginController extends Controller
 
             $request->session()->regenerate();
             $user->update(['last_login_at' => now()]);
+            $auditTrail->log($request, $user, 'login', 'login_success', 'Login berhasil.');
 
             return $user->role === 'admin'
                 ? redirect()->route('admin.dashboard')
-                : redirect()->route('pegawai.dashboard');
+                : redirect()->route('user.dashboard');
         }
 
         // if login fails
+        $auditTrail->log($request, $user, 'login', 'login_failed', 'Login gagal.', null, [
+            'username' => $request->username,
+        ]);
+
         return back()->withErrors([
             'username' => 'Username atau password tidak sesuai.',
         ]);
@@ -67,8 +73,11 @@ class LoginController extends Controller
      *
      * @return void
      */
-    public function logout(Request $request)
+    public function logout(Request $request, AuditTrailService $auditTrail)
     {
+        $user = $request->user();
+        $auditTrail->log($request, $user, 'login', 'logout', 'Logout dari aplikasi.');
+
         // logout user
         auth()->logout();
 

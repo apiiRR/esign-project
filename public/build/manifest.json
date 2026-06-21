@@ -10,7 +10,7 @@
     "isDynamicEntry": true
   },
   "resources/css/app.css": {
-    "file": "assets/app-tshJ4NEd.css",
+    "file": "assets/app-CQMdYGQ0.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -19,7 +19,7 @@
     ]
   },
   "resources/js/app.jsx": {
-    "file": "assets/app-Bwn6bxb3.js",
+    "file": "assets/app-BTBOIrTa.js",
     "name": "app",
     "src": "resources/js/app.jsx",
     "isEntry": true,

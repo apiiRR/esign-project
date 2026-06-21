@@ -20,11 +20,22 @@ class LetterSignatureRequest extends Model
         'height',
         'status',
         'signed_at',
+        'signed_ip_address',
+        'signed_user_agent',
+        'signed_device',
+        'signed_location_source',
+        'signed_latitude',
+        'signed_longitude',
+        'signed_city',
+        'signed_region',
+        'signed_country',
         'rejected_at',
         'note',
         'verification_token',
         'qr_file_path',
         'qr_payload',
+        'signature_visual_type',
+        'signature_image_path',
     ];
 
     protected $casts = [
@@ -34,6 +45,8 @@ class LetterSignatureRequest extends Model
         'height' => 'float',
         'qr_payload' => 'array',
         'signed_at' => 'datetime',
+        'signed_latitude' => 'decimal:7',
+        'signed_longitude' => 'decimal:7',
         'rejected_at' => 'datetime',
     ];
 

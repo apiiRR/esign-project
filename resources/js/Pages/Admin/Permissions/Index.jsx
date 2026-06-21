@@ -49,12 +49,31 @@ export default function PermissionsIndex() {
                 </div>
 
                 {/* Card */}
-                <div className="p-6 bg-white rounded-xl shadow-sm">
+                <div className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
 
                     <Search URL={'/admin/permissions'} />
 
                     {/* Table */}
-                    <div className="overflow-x-auto border border-gray-200 rounded-lg mt-5">
+                    <div className="mt-5 grid gap-3 md:hidden">
+                        {permissions && permissions.data.length > 0 ? permissions.data.map((permission, index) => (
+                            <div key={permission.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                                <div className="text-xs font-semibold text-gray-500">#{++index + (permissions.current_page - 1) * permissions.per_page}</div>
+                                <div className="mt-1 break-words text-base font-semibold text-gray-950">{permission.name}</div>
+                                <div className="mt-4 flex gap-2">
+                                    {hasAnyPermission(['permissions.edit']) ? (
+                                        <Link href={`/admin/permissions/${permission.id}/edit`} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-600">
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            Edit
+                                        </Link>
+                                    ) : null}
+                                    {hasAnyPermission(['permissions.delete']) ? <Delete URL={'/admin/permissions'} id={permission.id} /> : null}
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">Tidak ada permission.</div>
+                        )}
+                    </div>
+                    <div className="mt-5 hidden overflow-x-auto rounded-lg border border-gray-200 md:block">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>

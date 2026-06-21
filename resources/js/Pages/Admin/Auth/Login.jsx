@@ -6,13 +6,14 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 
 //import layout auth
 import LayoutAuth from '@/Layouts/LayoutAuth';
-import { appName, companyName } from "@/Utils/appIdentity";
+import { appName, companyName, loginLogoUrl } from "@/Utils/appIdentity";
 
 //import icons
 import { MoveLeft, Eye, EyeOff, User, Lock, LogIn, Files } from 'lucide-react';
 
 export default function Login() {
     const { settings } = usePage().props;
+    const logoUrl = loginLogoUrl(settings);
 
     //destruct useForm
     const { data, setData, post, processing, errors } = useForm({
@@ -39,7 +40,7 @@ export default function Login() {
                     <div className="w-full max-w-md pt-10 mx-auto">
                         <Link
                             href="/"
-                            className="inline-flex items-center text-sm text-gray-600 transition-colors hover:text-blue-600 group"
+                            className="inline-flex items-center text-sm text-gray-600 transition-colors hover:text-cyan-600 group"
                         >
                             <MoveLeft className="size-5 mr-2 transition-transform group-hover:-translate-x-1" />
                             <span className="font-medium">Kembali ke Home</span>
@@ -54,8 +55,14 @@ export default function Login() {
                                 <p className="text-gray-600">
                                     Masuk ke aplikasi persuratan {companyName(settings)}
                                 </p>
-                                <div className="mx-auto mt-5 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                                    <Files className="h-6 w-6" />
+                                <div className="mx-auto mt-5 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-50 to-fuchsia-50 p-2 shadow-sm">
+                                    {logoUrl ? (
+                                        <img src={logoUrl} alt={`Logo ${appName(settings)}`} className="h-full w-full object-contain" />
+                                    ) : (
+                                        <div className="flex h-full w-full items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-fuchsia-500 text-white">
+                                            <Files className="h-7 w-7" />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -74,7 +81,7 @@ export default function Login() {
                                             placeholder="username"
                                             value={data.username}
                                             onChange={(e) => setData('username', e.target.value)}
-                                            className="w-full pl-10 pr-4 py-3 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-200 hover:bg-white"
+                                            className="w-full pl-10 pr-4 py-3 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 focus:outline-none transition-all duration-200 hover:bg-white"
                                             
                                         />
                                     </div>
@@ -93,7 +100,7 @@ export default function Login() {
                                         </label>
                                         <Link
                                             href="#"
-                                            className="text-sm text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                                            className="text-sm text-cyan-700 hover:text-fuchsia-700 transition-colors duration-200"
                                         >
                                             Lupa password?
                                         </Link>
@@ -107,7 +114,7 @@ export default function Login() {
                                             placeholder="Masukkan password"
                                             value={data.password}
                                             onChange={(e) => setData('password', e.target.value)}
-                                            className="w-full pl-10 pr-12 py-3 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all duration-200 hover:bg-white"
+                                            className="w-full pl-10 pr-12 py-3 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 focus:outline-none transition-all duration-200 hover:bg-white"
                                             
                                         />
                                         <button
@@ -134,7 +141,7 @@ export default function Login() {
                                     <input 
                                         type="checkbox" 
                                         id="remember"
-                                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                        className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-cyan-500"
                                     />
                                     <label htmlFor="remember" className="block ml-3 text-sm text-gray-700">
                                         Ingat saya
@@ -146,7 +153,7 @@ export default function Login() {
                                     <button 
                                         type="submit" 
                                         disabled={processing}
-                                        className={`w-full px-4 py-3 text-sm font-semibold text-white rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${processing ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow hover:shadow-md'}`}
+                                        className={`w-full px-4 py-3 text-sm font-semibold text-white rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 ${processing ? 'bg-cyan-400 cursor-not-allowed' : 'bg-gradient-to-r from-cyan-500 to-fuchsia-500 shadow hover:from-cyan-600 hover:to-fuchsia-600 hover:shadow-md'}`}
                                     >
                                         {processing ? (
                                             <span className="flex items-center justify-center">

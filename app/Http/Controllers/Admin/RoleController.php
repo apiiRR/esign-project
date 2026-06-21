@@ -6,7 +6,10 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Services\AuditTrailService;
+use App\Support\ActivePermissions;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Routing\Controllers\Middleware;
@@ -59,7 +62,10 @@ class RoleController extends Controller implements HasMiddleware
     public function create(): Response
     {
         return Inertia::render('Admin/Roles/Create', [
-            'permissions' => Permission::select('id', 'name')->orderBy('name')->get(),
+            'permissions' => Permission::select('id', 'name')
+                ->whereIn('name', ActivePermissions::names())
+                ->orderBy('name')
+                ->get(),
         ]);
     }
 
@@ -72,9 +78,11 @@ class RoleController extends Controller implements HasMiddleware
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
-            'name' => 'required|in:admin,pegawai|unique:roles,name',
+            'name' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9._-]+$/', 'unique:roles,name'],
             'permissions' => 'nullable|array',
-            'permissions.*' => 'exists:permissions,id',
+            'permissions.*' => [
+                Rule::exists('permissions', 'id')->whereIn('name', ActivePermissions::names()),
+            ],
         ]);
 
         // create role
@@ -86,6 +94,10 @@ class RoleController extends Controller implements HasMiddleware
         if ($request->permissions) {
             $role->syncPermissions($request->permissions);
         }
+        app(AuditTrailService::class)->log($request, $request->user(), 'role', 'created', 'Membuat role baru.', $role, [
+            'role' => $role->name,
+            'permissions' => $request->permissions ?? [],
+        ]);
 
         return redirect()
             ->route('admin.roles.index')
@@ -104,8 +116,14 @@ class RoleController extends Controller implements HasMiddleware
 
         return Inertia::render('Admin/Roles/Edit', [
             'role' => $role,
-            'permissions' => Permission::select('id', 'name')->orderBy('name')->get(),
-            'rolePermissions' => $role->permissions->pluck('id'),
+            'permissions' => Permission::select('id', 'name')
+                ->whereIn('name', ActivePermissions::names())
+                ->orderBy('name')
+                ->get(),
+            'rolePermissions' => $role->permissions
+                ->whereIn('name', ActivePermissions::names())
+                ->pluck('id')
+                ->values(),
         ]);
     }
 
@@ -119,9 +137,11 @@ class RoleController extends Controller implements HasMiddleware
     public function update(Request $request, Role $role): RedirectResponse
     {
         $request->validate([
-            'name' => 'required|in:admin,pegawai|unique:roles,name,' . $role->id,
+            'name' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9._-]+$/', 'unique:roles,name,' . $role->id],
             'permissions' => 'nullable|array',
-            'permissions.*' => 'exists:permissions,id',
+            'permissions.*' => [
+                Rule::exists('permissions', 'id')->whereIn('name', ActivePermissions::names()),
+            ],
         ]);
 
         // update role
@@ -131,6 +151,10 @@ class RoleController extends Controller implements HasMiddleware
 
         // sync permissions
         $role->syncPermissions($request->permissions ?? []);
+        app(AuditTrailService::class)->log($request, $request->user(), 'role', 'updated', 'Mengubah role dan hak akses.', $role, [
+            'role' => $role->name,
+            'permissions' => $request->permissions ?? [],
+        ]);
 
         return redirect()
             ->route('admin.roles.index')
@@ -145,10 +169,13 @@ class RoleController extends Controller implements HasMiddleware
      */
     public function destroy(Role $role): RedirectResponse
     {
-        if (in_array($role->name, ['admin', 'pegawai'], true)) {
-            return back()->with('error', 'Role admin dan pegawai tidak dapat dihapus.');
+        if ($role->users()->exists()) {
+            return back()->with('error', 'Role masih digunakan oleh user.');
         }
 
+        app(AuditTrailService::class)->log(request(), request()->user(), 'role', 'deleted', 'Menghapus role.', $role, [
+            'role' => $role->name,
+        ]);
         $role->delete();
 
         return redirect()

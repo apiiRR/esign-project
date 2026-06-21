@@ -5,6 +5,7 @@ import { Link } from "@inertiajs/react";
 import { BookOpen, FileSearch, User, Settings, LogOut } from "lucide-react";
 
 export default function UserDropdown({ auth, activeDropdown, toggleDropdown }) {
+    const userPosition = auth.user.position || "-";
 
     // User navigation
     const userNavigation = [
@@ -40,7 +41,7 @@ export default function UserDropdown({ auth, activeDropdown, toggleDropdown }) {
                         {auth.user.name}
                     </p>
                     <p className="text-xs text-gray-500 font-medium">
-                        {auth.user.roles?.[0]?.name || "pegawai"}
+                        {userPosition}
                     </p>
                 </div>
                 <div className="relative">
@@ -61,7 +62,7 @@ export default function UserDropdown({ auth, activeDropdown, toggleDropdown }) {
                                     {auth.user.name}
                                 </p>
                                 <p className="text-xs text-gray-500 truncate">
-                                    {auth.user.roles?.[0]?.name || "pegawai"} · {auth.user.email}
+                                    {userPosition}
                                 </p>
                             </div>
                             <div className="py-1">

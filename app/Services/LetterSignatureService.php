@@ -46,9 +46,9 @@ class LetterSignatureService
                 ->exists();
     }
 
-    public function approve(LetterSignatureRequest $signatureRequest, User $user, ?string $note = null): LetterSignatureRequest
+    public function approve(LetterSignatureRequest $signatureRequest, User $user, string $visualType = 'qr', ?string $imagePath = null): LetterSignatureRequest
     {
-        return DB::transaction(function () use ($signatureRequest, $user, $note) {
+        return DB::transaction(function () use ($signatureRequest, $user, $visualType, $imagePath) {
             $signatureRequest = LetterSignatureRequest::query()
                 ->with(['letter.attachments', 'letter.targets', 'letter.currentVersion', 'documentVersion', 'signer'])
                 ->lockForUpdate()
@@ -59,7 +59,7 @@ class LetterSignatureService
             $updates = [
                 'status' => 'signed',
                 'signed_at' => now(),
-                'note' => $note,
+                'note' => null,
             ];
             $signedPdfPath = null;
 
@@ -67,11 +67,20 @@ class LetterSignatureService
                 $token = $this->makeVerificationToken();
                 $verifyUrl = route('signature.verify', $token);
                 $qrPath = $this->generateQr($verifyUrl, $signatureRequest);
-                $signedPdfPath = $this->stampQrToPdf($signatureRequest, $qrPath, $user);
+                $visualType = in_array($visualType, ['qr', 'saved_signature', 'uploaded_signature'], true) ? $visualType : 'qr';
+                $stampPath = $visualType === 'qr' ? $qrPath : $imagePath;
+
+                if ($visualType !== 'qr' && ! $stampPath) {
+                    throw ValidationException::withMessages(['signature_visual' => 'Gambar tanda tangan belum tersedia.']);
+                }
+
+                $signedPdfPath = $this->stampVisualToPdf($signatureRequest, $stampPath, $visualType);
 
                 $updates += [
                     'verification_token' => $token,
                     'qr_file_path' => $qrPath,
+                    'signature_visual_type' => $visualType,
+                    'signature_image_path' => $visualType === 'qr' ? null : $stampPath,
                     'qr_payload' => [
                         'url' => $verifyUrl,
                         'letter_id' => $signatureRequest->letter_id,
@@ -92,17 +101,28 @@ class LetterSignatureService
             }
             $letter->update($letterUpdates);
 
-            $nextRequest = LetterSignatureRequest::query()
+            $signatureFlow = data_get($letter->meta, 'signature_flow', 'sequential');
+            $nextRequest = null;
+
+            if ($signatureFlow === 'sequential') {
+                $nextRequest = LetterSignatureRequest::query()
+                    ->where('letter_id', $letter->id)
+                    ->where('letter_document_version_id', $signatureRequest->letter_document_version_id)
+                    ->where('status', 'pending')
+                    ->orderBy('signing_order')
+                    ->first();
+            }
+
+            $unfinishedExists = LetterSignatureRequest::query()
                 ->where('letter_id', $letter->id)
                 ->where('letter_document_version_id', $signatureRequest->letter_document_version_id)
-                ->where('status', 'pending')
-                ->orderBy('signing_order')
-                ->first();
+                ->where('status', '!=', 'signed')
+                ->exists();
 
             if ($nextRequest) {
                 $nextRequest->update(['status' => 'ready']);
                 $this->notifySigner($nextRequest, $letter);
-            } else {
+            } elseif (! $unfinishedExists) {
                 $letter->update(['signature_status' => 'signed']);
                 $signatureRequest->documentVersion?->update([
                     'status' => 'signed',
@@ -110,44 +130,6 @@ class LetterSignatureService
                 ]);
                 $this->notifyLetterRecipients($letter);
             }
-
-            return $signatureRequest->fresh(['letter', 'signer']);
-        });
-    }
-
-    public function reject(LetterSignatureRequest $signatureRequest, User $user, string $note): LetterSignatureRequest
-    {
-        return DB::transaction(function () use ($signatureRequest, $user, $note) {
-            $signatureRequest = LetterSignatureRequest::query()
-                ->with(['letter.currentVersion', 'documentVersion', 'signer'])
-                ->lockForUpdate()
-                ->findOrFail($signatureRequest->id);
-
-            $this->assertCanAct($signatureRequest, $user);
-
-            $signatureRequest->update([
-                'status' => 'rejected',
-                'rejected_at' => now(),
-                'note' => $note,
-            ]);
-
-            $letter = $signatureRequest->letter;
-            $letter->update(['signature_status' => 'rejected']);
-            $signatureRequest->documentVersion?->update([
-                'status' => 'rejected',
-                'rejected_by' => $user->id,
-                'rejected_at' => now(),
-                'rejection_note' => $note,
-                'signed_pdf_path' => $letter->signed_pdf_path,
-            ]);
-
-            $isParaf = $signatureRequest->isParaf();
-            $this->notifications->signature(
-                $letter->created_by,
-                $letter,
-                $isParaf ? 'Paraf dokumen ditolak' : 'Tanda tangan QR ditolak',
-                trim($user->name . ($isParaf ? ' menolak paraf. ' : ' menolak tanda tangan. ') . $note)
-            );
 
             return $signatureRequest->fresh(['letter', 'signer']);
         });
@@ -166,13 +148,18 @@ class LetterSignatureService
             return;
         }
 
+        $signatureFlow = data_get($letter->meta, 'signature_flow', 'sequential');
         $letter->update(['signature_status' => 'pending']);
 
         foreach ($requests as $index => $request) {
-            $request->update(['status' => $index === 0 ? 'ready' : 'pending']);
+            $request->update([
+                'status' => $signatureFlow === 'parallel' || $index === 0 ? 'ready' : 'pending',
+            ]);
         }
 
-        $this->notifySigner($requests->first(), $letter);
+        $requests
+            ->filter(fn (LetterSignatureRequest $request) => $request->status === 'ready')
+            ->each(fn (LetterSignatureRequest $request) => $this->notifySigner($request, $letter));
     }
 
     public function createInitialVersion(Letter $letter, LetterAttachment $attachment, ?User $uploader = null): LetterDocumentVersion
@@ -245,7 +232,7 @@ class LetterSignatureService
                     ->get()
                     ->map(fn (LetterSignatureRequest $request) => [
                         'signer_user_id' => $request->signer_user_id,
-                        'approval_type' => $request->approval_type ?: 'signature',
+                        'approval_type' => 'signature',
                         'signing_order' => $request->signing_order,
                         'page_number' => $request->page_number,
                         'x' => $request->x,
@@ -259,7 +246,7 @@ class LetterSignatureService
                     'letter_document_version_id' => $version->id,
                     'requested_by' => $uploader->id,
                     'signer_user_id' => (int) $request['signer_user_id'],
-                    'approval_type' => $request['approval_type'] ?? 'signature',
+                    'approval_type' => 'signature',
                     'signing_order' => (int) $request['signing_order'],
                     'page_number' => (int) ($request['page_number'] ?? 1),
                     'x' => (float) ($request['x'] ?? 0),
@@ -297,7 +284,7 @@ class LetterSignatureService
 
         if (! $this->hasReadLetter($signatureRequest, $user)) {
             throw ValidationException::withMessages([
-                'signature' => 'Buka dan baca detail surat terlebih dahulu sebelum approve atau reject.',
+                'signature' => 'Buka dan baca detail surat terlebih dahulu sebelum tanda tangan.',
             ]);
         }
     }
@@ -333,7 +320,7 @@ class LetterSignatureService
         return $relativePath;
     }
 
-    private function stampQrToPdf(LetterSignatureRequest $signatureRequest, string $qrPath, User $user): string
+    private function stampVisualToPdf(LetterSignatureRequest $signatureRequest, string $visualPath, string $visualType): string
     {
         $letter = $signatureRequest->letter;
         $version = $signatureRequest->documentVersion ?: $letter->currentVersion;
@@ -347,13 +334,13 @@ class LetterSignatureService
         }
 
         $sourceAbsolute = Storage::disk('public')->path($sourcePath);
-        $qrAbsolute = Storage::disk('public')->path($qrPath);
+        $visualAbsolute = Storage::disk('public')->path($visualPath);
 
-        if (! is_file($sourceAbsolute) || ! is_file($qrAbsolute)) {
-            throw ValidationException::withMessages(['signature' => 'File PDF atau QR tidak tersedia di storage.']);
+        if (! is_file($sourceAbsolute) || ! is_file($visualAbsolute)) {
+            throw ValidationException::withMessages(['signature' => 'File PDF atau visual tanda tangan tidak tersedia di storage.']);
         }
 
-        $destinationPath = 'signatures/signed/' . $letter->reference . '/v' . ($version?->version_number ?: 1) . '-signed-' . $signatureRequest->id . '.pdf';
+        $destinationPath = 'signatures/signed/letter-' . $letter->id . '/v' . ($version?->version_number ?: 1) . '-signed-' . $signatureRequest->id . '.pdf';
         $destinationAbsolute = Storage::disk('public')->path($destinationPath);
 
         if (! is_dir(dirname($destinationAbsolute))) {
@@ -382,9 +369,10 @@ class LetterSignatureService
                 $boxY = max(0, min(1, $signatureRequest->y)) * $height;
                 $boxWidth = max(0.04, min(1, $signatureRequest->width)) * $width;
                 $boxHeight = max(0.04, min(1, $signatureRequest->height)) * $height;
-                $qrSize = min($boxWidth, $boxHeight * 0.7);
+                $imageWidth = $visualType === 'qr' ? min($boxWidth, $boxHeight * 0.9) : $boxWidth;
+                $imageHeight = $visualType === 'qr' ? $imageWidth : $boxHeight;
 
-                $pdf->Image($qrAbsolute, $boxX, $boxY, $qrSize, $qrSize, 'PNG');
+                $pdf->Image($visualAbsolute, $boxX, $boxY, $imageWidth, $imageHeight);
             }
         }
 
@@ -422,7 +410,7 @@ class LetterSignatureService
             $signatureRequest->signer_user_id,
             $letter,
             $isParaf ? 'Approval paraf dokumen' : 'Approval tanda tangan QR',
-            ($isParaf ? 'Permintaan paraf untuk ' : 'Permintaan tanda tangan untuk ') . ($letter->letter_number ?: $letter->reference)
+            ($isParaf ? 'Permintaan paraf untuk ' : 'Permintaan tanda tangan untuk ') . ($letter->letter_number ?: 'dokumen')
         );
     }
 

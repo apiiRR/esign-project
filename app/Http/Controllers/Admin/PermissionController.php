@@ -6,6 +6,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Services\AuditTrailService;
 use Illuminate\Http\RedirectResponse;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Routing\Controllers\Middleware;
@@ -71,8 +72,11 @@ class PermissionController extends Controller implements HasMiddleware
             'name' => 'required|unique:permissions,name',
         ]);
 
-        Permission::create([
+        $permission = Permission::create([
             'name' => $request->name,
+        ]);
+        app(AuditTrailService::class)->log($request, $request->user(), 'permission', 'created', 'Membuat permission.', $permission, [
+            'permission' => $permission->name,
         ]);
 
         return redirect()
@@ -109,6 +113,9 @@ class PermissionController extends Controller implements HasMiddleware
         $permission->update([
             'name' => $request->name,
         ]);
+        app(AuditTrailService::class)->log($request, $request->user(), 'permission', 'updated', 'Mengubah permission.', $permission, [
+            'permission' => $permission->name,
+        ]);
 
         return redirect()
             ->route('admin.permissions.index')
@@ -123,6 +130,9 @@ class PermissionController extends Controller implements HasMiddleware
      */
     public function destroy(Permission $permission): RedirectResponse
     {
+        app(AuditTrailService::class)->log(request(), request()->user(), 'permission', 'deleted', 'Menghapus permission.', $permission, [
+            'permission' => $permission->name,
+        ]);
         $permission->delete();
 
         return redirect()

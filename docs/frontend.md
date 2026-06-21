@@ -14,16 +14,16 @@ Entry point Inertia React. File ini:
 
 - `LayoutAdmin.jsx`
   Layout admin dengan sidebar/menu admin.
-- `LayoutPegawai.jsx`
-  Layout pegawai dengan menu dashboard, inbox, disposisi, buat surat, arsip, notifikasi bell, dokumentasi.
+- `LayoutUser.jsx`
+  Layout user dengan menu dashboard, inbox, disposisi, buat surat, arsip, notifikasi bell, dokumentasi.
 - `LayoutAuth.jsx`
   Layout halaman login.
 
-## Halaman Pegawai
+## Halaman User
 
-### `resources/js/Pages/Pegawai/Portal/Workspace.jsx`
+### `resources/js/Pages/User/Portal/Workspace.jsx`
 
-Ini adalah file utama portal pegawai. File ini merender banyak halaman berdasarkan props:
+Ini adalah file utama portal user. File ini merender banyak halaman berdasarkan props:
 
 - `section = dashboard`
 - `section = inbox`

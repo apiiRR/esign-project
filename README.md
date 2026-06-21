@@ -5,18 +5,18 @@ Aplikasi persuratan dan arsip digital berbasis Laravel, Inertia React, Tailwind 
 ## Fitur Utama
 
 - Login satu pintu berbasis username dan password.
-- Role akses sederhana: `admin` dan `pegawai`.
+- Role akses sederhana: `admin` dan `user`.
 - Master organisasi: direktorat, divisi, department, dan pejabat unit.
 - Master jenis surat dengan konfigurasi nomor surat otomatis.
 - Template surat Nota Dinas untuk surat internal dan surat keluar.
-- Portal pegawai untuk inbox internal, tebusan, disposisi, buat surat, dan arsip saya.
+- Portal user untuk inbox internal, tebusan, disposisi, buat surat, dan arsip saya.
 - Surat internal dan surat keluar mendukung `Simpan Draft`, `Send`, dan `Hapus Draft`.
 - Upload dan preview file scan PDF.
 - Read receipt, notification log, dan Laravel Log Viewer untuk error teknis.
 - PWA installable minimal untuk laptop dan perangkat mobile.
 - Dokumentasi aplikasi:
   - Admin: `/admin/dokumentasi`
-  - Pegawai: `/pegawai/dokumentasi`
+  - User: `/user/dokumentasi`
   - Developer public: `/developer-docs`
 - Dokumentasi teknis source code tersedia di folder [`docs/`](docs/README.md).
 
@@ -83,12 +83,12 @@ npm run dev
 Seeder menyediakan akun awal:
 
 - Admin: `admin` / `password`
-- Pegawai: `pegawai` / `password`
+- User: `user` / `password`
 
 Setelah login:
 
 - Role `admin` diarahkan ke `/admin/dashboard`.
-- Role `pegawai` diarahkan ke `/pegawai/dashboard`.
+- Role `user` diarahkan ke `/user/dashboard`.
 
 ## Menu Admin
 
@@ -101,7 +101,7 @@ Setelah login:
 
 Admin mengatur data master, user, template, jenis surat, format nomor surat, notifikasi, log teknis, dan pengaturan dasar aplikasi.
 
-## Menu Pegawai
+## Menu User
 
 - Dashboard.
 - Inbox Internal.
@@ -129,7 +129,7 @@ Nomor surat diatur dari master `Jenis Surat`. Format default:
 Contoh:
 
 ```text
-08-01/01/BDK/GM-1.3/I/2026
+08-01/01/APP/GM-1.3/I/2026
 ```
 
 Keterangan:
@@ -137,7 +137,7 @@ Keterangan:
 - `08`: tanggal pembuatan atau booking nomor.
 - `01`: sequence harian.
 - `01`: kode jenis surat.
-- `BDK`: kode perusahaan.
+- `APP`: kode perusahaan.
 - `GM-1.3`: kode asal surat.
 - `I`: bulan dalam romawi.
 - `2026`: tahun.
@@ -199,6 +199,6 @@ Jika muncul warning `Module "mongodb" is already loaded`, periksa konfigurasi PH
 - Route publik dokumentasi developer: `/developer-docs`.
 - Log Viewer admin: `/log-viewer`.
 - Route admin dilindungi middleware `auth` dan `role:admin`.
-- Route pegawai dilindungi middleware `auth`.
+- Route user dilindungi middleware `auth`.
 - File upload surat memakai disk `public`.
 - Jangan menghapus kolom kode unit organisasi walaupun tidak tampil di UI, karena kode dipakai untuk `origin_code` nomor surat.

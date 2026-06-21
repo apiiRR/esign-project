@@ -40,16 +40,6 @@ export default function LetterInformation(letter) {
                 </div>
 
                 <div>
-                    <label className="text-sm font-medium text-gray-500">Referensi</label>
-                    <p className="text-gray-900 font-mono">{letter.reference}</p>
-                </div>
-
-                <div>
-                    <label className="text-sm font-medium text-gray-500">Status</label>
-                    <p className="text-gray-900 font-semibold">{letter.status}</p>
-                </div>
-
-                <div>
                     <label className="text-sm font-medium text-gray-500">Diajukan Pada</label>
                     <div className="flex items-center">
                         <Calendar className="w-4 h-4 text-gray-400 mr-2" />

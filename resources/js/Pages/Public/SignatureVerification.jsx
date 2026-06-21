@@ -16,7 +16,7 @@ function formatDate(value) {
 
 function letterDisplayNumber(letter) {
     if (!letter) return "-";
-    return letter.letter_number || letter.reference || "-";
+    return letter.letter_number || "-";
 }
 
 export default function SignatureVerification({ signature, letter }) {
@@ -45,10 +45,6 @@ export default function SignatureVerification({ signature, letter }) {
                             <dt className="text-xs font-semibold uppercase text-gray-500">Nomor Surat</dt>
                             <dd className="mt-1 font-semibold text-gray-950">{letterDisplayNumber(letter)}</dd>
                         </div>
-                        <div>
-                            <dt className="text-xs font-semibold uppercase text-gray-500">Kode Teknis</dt>
-                            <dd className="mt-1 font-semibold text-gray-950">{letter?.reference || "-"}</dd>
-                        </div>
                         <div className="sm:col-span-2">
                             <dt className="text-xs font-semibold uppercase text-gray-500">Perihal</dt>
                             <dd className="mt-1 font-semibold text-gray-950">{letter?.subject || letter?.title || "-"}</dd>
@@ -69,12 +65,6 @@ export default function SignatureVerification({ signature, letter }) {
                             <dt className="text-xs font-semibold uppercase text-gray-500">Tanggal Tanda Tangan</dt>
                             <dd className="mt-1 font-semibold text-gray-950">{formatDate(signature?.signed_at)}</dd>
                         </div>
-                        {signature?.note ? (
-                            <div className="sm:col-span-2">
-                                <dt className="text-xs font-semibold uppercase text-gray-500">Catatan Persetujuan</dt>
-                                <dd className="mt-1 whitespace-pre-line font-semibold text-gray-950">{signature.note}</dd>
-                            </div>
-                        ) : null}
                     </dl>
                 </div>
             </div>

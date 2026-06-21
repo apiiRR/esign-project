@@ -35,35 +35,30 @@ class UserTableSeeder extends Seeder
             'status' => 'active',
         ]);
 
-        $pegawai = User::create([
-            'username' => 'pegawai',
+        $user = User::create([
+            'username' => 'user',
             'name' => 'Arif Setiawan',
             'email' => 'arif.setiawan@berdikari.co.id',
             'password' => bcrypt('password'),
-            'role' => 'pegawai',
+            'role' => 'user',
             'directorate_id' => $directorate?->id,
             'division_id' => $division?->id,
             'department_id' => $department?->id,
-            'position' => 'Pegawai',
+            'position' => 'User',
             'status' => 'active',
         ]);
 
         $adminRole = Role::where('name', 'admin')->first();
-        $pegawaiRole = Role::where('name', 'pegawai')->first();
+        $userRole = Role::where('name', 'user')->first();
 
         $adminRole->syncPermissions(Permission::all());
-        $pegawaiRole->syncPermissions(Permission::whereIn('name', [
-            'pegawai.dashboard',
-            'pegawai.inbox',
-            'pegawai.letters.create',
-            'pegawai.archive',
-            'inbox.internal',
-            'inbox.tebusan',
-            'inbox.disposisi',
+        $userRole->syncPermissions(Permission::whereIn('name', [
+            'user.dashboard',
+            'user.letters.create',
         ])->get());
 
         $admin->assignRole($adminRole);
-        $pegawai->assignRole($pegawaiRole);
+        $user->assignRole($userRole);
 
         if ($directorate) {
             $directorate->update(['director_user_id' => $admin->id]);
@@ -74,7 +69,7 @@ class UserTableSeeder extends Seeder
         }
 
         if ($department) {
-            $department->update(['manager_user_id' => $pegawai->id]);
+            $department->update(['manager_user_id' => $user->id]);
         }
     }
 }

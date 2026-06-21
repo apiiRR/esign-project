@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Support\ActivePermissions;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 
@@ -9,41 +10,7 @@ class PermissionsTableSeeder extends Seeder
 {
     public function run(): void
     {
-        $permissions = [
-            'dashboard.index',
-            'inbox.internal',
-            'inbox.tebusan',
-            'inbox.disposisi',
-            'pegawai.dashboard',
-            'pegawai.inbox',
-            'pegawai.letters.create',
-            'pegawai.archive',
-            'organization.index',
-            'notifications.index',
-            'users.index',
-            'users.create',
-            'users.edit',
-            'users.delete',
-            'roles.index',
-            'roles.create',
-            'roles.edit',
-            'roles.delete',
-            'permissions.index',
-            'permissions.create',
-            'permissions.edit',
-            'permissions.delete',
-            'letter-types.index',
-            'letter-types.create',
-            'letter-types.edit',
-            'letter-types.delete',
-            'letters.index',
-            'letters.create',
-            'letters.show',
-            'letters.edit',
-            'letters.delete',
-            'settings.index',
-            'settings.update',
-        ];
+        $permissions = ActivePermissions::names();
 
         foreach ($permissions as $permission) {
             Permission::firstOrCreate([
@@ -51,5 +18,11 @@ class PermissionsTableSeeder extends Seeder
                 'guard_name' => 'web',
             ]);
         }
+
+        Permission::query()
+            ->whereNotIn('name', $permissions)
+            ->get()
+            ->each
+            ->delete();
     }
 }

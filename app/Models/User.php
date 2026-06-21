@@ -28,6 +28,7 @@ class User extends Authenticatable
         'division_id',
         'department_id',
         'position',
+        'signature_specimen_path',
         'status',
         'last_login_at',
     ];

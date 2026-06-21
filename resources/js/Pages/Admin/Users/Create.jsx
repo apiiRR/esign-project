@@ -1,21 +1,16 @@
 import { Head, Link, useForm, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
-import { Building2, Save, Shield, UserRound } from "lucide-react";
+import { Save, Shield, UserRound } from "lucide-react";
 import { appName } from "@/Utils/appIdentity";
 
-const positions = ["Direktur", "General Manager", "Manager", "Pegawai"];
-
 export default function UsersCreate() {
-    const { roles, directorates, divisions, departments, settings } = usePage().props;
+    const { roles, settings } = usePage().props;
     const { data, setData, post, processing, errors } = useForm({
         username: "",
         name: "",
         email: "",
         password: "",
         roles: [],
-        directorate_id: "",
-        division_id: "",
-        department_id: "",
         position: "",
         status: "active",
     });
@@ -23,7 +18,6 @@ export default function UsersCreate() {
     const toggleRole = (id) => {
         setData("roles", [id]);
     };
-    const officerPreview = organizationOfficerPreview(data, directorates, divisions, departments);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -39,33 +33,20 @@ export default function UsersCreate() {
                 <div className="space-y-6">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-950">Tambah User</h1>
-                        <p className="mt-2 text-sm text-gray-600">Buat akun perusahaan, role akses, unit kerja, jabatan organisasi, dan status akun.</p>
+                        <p className="mt-2 text-sm text-gray-600">Buat akun perusahaan, role akses, posisi, dan status akun.</p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="grid gap-6 xl:grid-cols-3">
                         <div className="space-y-6 xl:col-span-2">
                             <Section icon={UserRound} title="Identitas Akun">
                                 <div className="grid gap-4 md:grid-cols-2">
-                                    <Field label="Nama Lengkap" value={data.name} onChange={(value) => setData("name", value)} error={errors.name} placeholder="Nama pegawai" />
-                                    <Field label="Email Kantor" type="email" value={data.email} onChange={(value) => setData("email", value)} error={errors.email} placeholder="nama@berdikari.co.id" />
+                                    <Field label="Nama Lengkap" value={data.name} onChange={(value) => setData("name", value)} error={errors.name} placeholder="Nama user" />
+                                    <Field label="Email" type="email" value={data.email} onChange={(value) => setData("email", value)} error={errors.email} placeholder="nama@berdikari.co.id" />
                                     <Field label="Username" value={data.username} onChange={(value) => setData("username", value)} error={errors.username} placeholder="nama.belakang" />
                                     <Field label="Password" type="password" value={data.password} onChange={(value) => setData("password", value)} error={errors.password} placeholder="Minimal 8 karakter" />
-                                </div>
-                            </Section>
-
-                            <Section
-                                icon={Building2}
-                                title="Unit Kerja & Jabatan Organisasi"
-                                description="Unit kerja menentukan user berada di direktorat/divisi/department mana. Jabatan organisasi akan otomatis mengisi pejabat unit terkait."
-                            >
-                                <div className="grid gap-4 md:grid-cols-2">
-                                    <Select label="Direktorat" value={data.directorate_id} options={directorates} onChange={(value) => setData("directorate_id", value)} nullable />
-                                    <Select label="Divisi" value={data.division_id} options={divisions} onChange={(value) => setData("division_id", value)} nullable />
-                                    <Select label="Department" value={data.department_id} options={departments} onChange={(value) => setData("department_id", value)} nullable />
-                                    <Select label="Jabatan Organisasi" value={data.position} options={positions} onChange={(value) => setData("position", value)} nullable />
+                                    <Field label="Posisi" value={data.position} onChange={(value) => setData("position", value)} error={errors.position} placeholder="Contoh: Staff Administrasi" />
                                     <Select label="Status Akun" value={data.status} options={[{ id: "active", name: "Aktif" }, { id: "inactive", name: "Nonaktif" }]} onChange={(value) => setData("status", value)} />
                                 </div>
-                                <OfficerPreview message={officerPreview} />
                             </Section>
                         </div>
 
@@ -83,8 +64,8 @@ export default function UsersCreate() {
                             </Section>
 
                             <div className="flex gap-3">
-                                <Link href="/admin/users" className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50">Batal</Link>
-                                <button type="submit" disabled={processing} className="inline-flex flex-1 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">
+                                <Link href="/admin/users" className="min-h-11 flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-gray-700 hover:bg-gray-50">Batal</Link>
+                                <button type="submit" disabled={processing} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">
                                     <Save className="mr-2 h-4 w-4" />
                                     {processing ? "Menyimpan..." : "Simpan"}
                                 </button>
@@ -112,33 +93,6 @@ function Section({ icon: Icon, title, description, children }) {
             {children}
         </div>
     );
-}
-
-function OfficerPreview({ message }) {
-    return (
-        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-            {message || "Jika jabatan Direktur, General Manager, atau Manager dipilih, master organisasi akan terisi otomatis sesuai unit kerja."}
-        </div>
-    );
-}
-
-function organizationOfficerPreview(data, directorates, divisions, departments) {
-    if (data.position === "Direktur") {
-        const unit = (directorates || []).find((item) => String(item.id) === String(data.directorate_id));
-        return unit ? `Akan menjadi Direktur pada ${unit.name}.` : "Pilih direktorat agar sistem bisa mengisi pejabat unit.";
-    }
-
-    if (data.position === "General Manager") {
-        const unit = (divisions || []).find((item) => String(item.id) === String(data.division_id));
-        return unit ? `Akan menjadi General Manager pada ${unit.name}.` : "Pilih divisi agar sistem bisa mengisi pejabat unit.";
-    }
-
-    if (data.position === "Manager") {
-        const unit = (departments || []).find((item) => String(item.id) === String(data.department_id));
-        return unit ? `Akan menjadi Manager pada ${unit.name}.` : "Pilih department agar sistem bisa mengisi pejabat unit.";
-    }
-
-    return "";
 }
 
 function Field({ label, value, onChange, placeholder, type = "text", error, hint }) {

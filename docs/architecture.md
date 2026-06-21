@@ -6,7 +6,7 @@ Aplikasi ini adalah sistem persuratan dan arsip digital berbasis:
 
 - Laravel sebagai backend, routing, validasi, database access, auth, dan controller.
 - Inertia.js sebagai jembatan Laravel ke React tanpa API REST terpisah.
-- React untuk halaman admin, pegawai, dan dokumentasi.
+- React untuk halaman admin, user, dan dokumentasi.
 - Tailwind CSS untuk styling.
 - PostgreSQL untuk database production.
 - PWA/Vite untuk build asset frontend.
@@ -16,7 +16,7 @@ Secara umum, request browser masuk ke route Laravel, controller mengambil data d
 ## Entry Point
 
 - `routes/web.php`
-  Mendefinisikan semua route web, termasuk login, admin, pegawai, dan developer docs.
+  Mendefinisikan semua route web, termasuk login, admin, user, dan developer docs.
 - `resources/js/app.jsx`
   Entry point React/Inertia.
 - `resources/views/app.blade.php`
@@ -29,7 +29,7 @@ Secara umum, request browser masuk ke route Laravel, controller mengambil data d
 ### Public dan Auth
 
 - `/` redirect ke login.
-- `/login` login satu pintu untuk admin dan pegawai.
+- `/login` login satu pintu untuk admin dan user.
 - `/logout` logout.
 - `/developer-docs` halaman dokumentasi developer publik.
 
@@ -48,13 +48,13 @@ Admin mengelola:
 - Permission, role, user.
 - Jenis surat.
 
-### Pegawai
+### User
 
-Prefix route: `/pegawai`, name prefix: `pegawai.`, middleware: `auth`.
+Prefix route: `/user`, name prefix: `user.`, middleware: `auth`.
 
-Pegawai memakai satu controller utama: `App\Http\Controllers\Pegawai\PortalController`.
+User memakai satu controller utama: `App\Http\Controllers\User\PortalController`.
 
-Halaman pegawai meliputi:
+Halaman user meliputi:
 
 - Dashboard.
 - Inbox internal.
@@ -70,7 +70,7 @@ Halaman pegawai meliputi:
 Controller mengembalikan:
 
 ```php
-return inertia('Pegawai/Portal/Workspace', $props);
+return inertia('User/Portal/Workspace', $props);
 ```
 
 React menerima props melalui:
@@ -87,8 +87,8 @@ Karena Inertia dipakai langsung, validasi backend Laravel akan otomatis mengirim
 
 - `app/Http/Controllers/Admin`
   Controller admin untuk dashboard, surat, master data, user, role, permission, setting.
-- `app/Http/Controllers/Pegawai/PortalController.php`
-  Controller utama pegawai untuk dashboard, surat, arsip, disposisi, publish, notifikasi.
+- `app/Http/Controllers/User/PortalController.php`
+  Controller utama user untuk dashboard, surat, arsip, disposisi, publish, notifikasi.
 - `app/Models`
   Model Eloquent untuk user, organisasi, surat, target, disposisi, notifikasi, setting.
 - `app/Services`
@@ -97,11 +97,11 @@ Karena Inertia dipakai langsung, validasi backend Laravel akan otomatis mengirim
 ### Frontend
 
 - `resources/js/Layouts`
-  Layout admin, pegawai, dan auth.
+  Layout admin, user, dan auth.
 - `resources/js/Pages/Admin`
   Halaman admin.
-- `resources/js/Pages/Pegawai/Portal/Workspace.jsx`
-  Halaman utama portal pegawai, berisi banyak view internal sesuai prop `section` dan `mode`.
+- `resources/js/Pages/User/Portal/Workspace.jsx`
+  Halaman utama portal user, berisi banyak view internal sesuai prop `section` dan `mode`.
 - `resources/js/Shared`
   Komponen reusable seperti Search, Pagination, PageHeader, FormErrorSummary.
 
@@ -113,7 +113,7 @@ Surat utama disimpan di tabel `letters`. Field penting:
 
 - `type`: jenis teknis surat.
 - `letter_number`: nomor publik/dokumen yang ditampilkan user.
-- `reference`: ID internal aplikasi, seperti `BDK-OUT-...`.
+- `reference`: ID teknis internal aplikasi berbasis UUID.
 - `created_by`: user aktor pembuat.
 - `origin_directorate_id`, `origin_division_id`, `origin_department_id`: unit asal surat.
 - `status`: status internal seperti draft/sent/received/archived.
@@ -132,14 +132,6 @@ Target surat disimpan di `letter_targets`.
 ### Disposisi
 
 Disposisi disimpan di `dispositions`. Disposisi mendukung thread lewat `parent_id`, target unit/jabatan, dan snapshot unit pengirim.
-
-### Status Baca
-
-Status baca surat disimpan di `letter_read_receipts`, satu record per surat per user.
-
-### Notifikasi
-
-Notifikasi web disimpan di `notification_logs`.
 
 ## Prinsip Akses
 

@@ -39,11 +39,15 @@ class Setting extends Model
         'company_name',
         'company_code',
         'company_logo',
+        'login_logo',
         'letter_field_requirements',
         'mail_notifications_enabled',
         'mail_letter_notifications_enabled',
         'mail_signature_approval_notifications_enabled',
         'signature_otp_enabled',
+        'document_download_otp_scope',
+        'document_download_watermark_settings',
+        'document_download_watermark_sample_pdf',
         'mail_mailer',
         'mail_host',
         'mail_port',
@@ -65,13 +69,37 @@ class Setting extends Model
         'mail_letter_notifications_enabled' => 'boolean',
         'mail_signature_approval_notifications_enabled' => 'boolean',
         'signature_otp_enabled' => 'boolean',
+        'document_download_watermark_settings' => 'array',
         'mail_password' => 'encrypted',
         'mail_templates' => 'array',
+    ];
+
+    public const DEFAULT_DOCUMENT_DOWNLOAD_WATERMARK_SETTINGS = [
+        'x_percent' => 50,
+        'y_percent' => 50,
+        'angle' => 45,
+        'font_size' => 14,
+        'opacity' => 35,
+        'color' => 'gray',
+        'text_template' => 'Downloaded by {user_name} | {user_email} | {downloaded_at} WIB | {document_number}',
     ];
 
     public static function defaultMailTemplates(): array
     {
         return self::DEFAULT_MAIL_TEMPLATES;
+    }
+
+    public static function defaultDocumentDownloadWatermarkSettings(): array
+    {
+        return self::DEFAULT_DOCUMENT_DOWNLOAD_WATERMARK_SETTINGS;
+    }
+
+    public function documentDownloadWatermarkSettingsWithDefaults(): array
+    {
+        return array_replace(
+            self::defaultDocumentDownloadWatermarkSettings(),
+            $this->document_download_watermark_settings ?: []
+        );
     }
 
     public function mailTemplatesWithDefaults(): array

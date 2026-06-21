@@ -47,7 +47,7 @@ return new class extends Migration
             $table->string('email')->unique()->nullable();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->enum('role', ['admin', 'pegawai'])->default('pegawai')->index();
+            $table->string('role')->default('user')->index();
             $table->foreignId('directorate_id')->nullable()->constrained('directorates')->nullOnDelete();
             $table->foreignId('division_id')->nullable()->constrained('divisions')->nullOnDelete();
             $table->foreignId('department_id')->nullable()->constrained('departments')->nullOnDelete();

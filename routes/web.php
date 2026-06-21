@@ -11,6 +11,21 @@ Route::get('/developer-docs', [\App\Http\Controllers\DocumentationController::cl
 Route::get('/verify/signature/{token}', [\App\Http\Controllers\SignatureVerificationController::class, 'show'])
     ->name('signature.verify');
 
+Route::get('/csrf-token', fn () => response()->json(['token' => csrf_token()]))
+    ->middleware('web')
+    ->name('csrf-token');
+
+Route::get('/media/settings/{filename}', function (string $filename) {
+    abort_if(\Illuminate\Support\Str::contains($filename, ['..', '/', '\\']), 404);
+
+    $path = 'settings/' . $filename;
+    abort_unless(\Illuminate\Support\Facades\Storage::disk('public')->exists($path), 404);
+
+    return response()->file(\Illuminate\Support\Facades\Storage::disk('public')->path($path), [
+        'Cache-Control' => 'public, max-age=31536000, immutable',
+    ]);
+})->where('filename', '[^/]+')->name('media.settings');
+
 // route login satu pintu
 Route::get('/login', [\App\Http\Controllers\Admin\Auth\LoginController::class, 'index'])
     ->name('login')
@@ -51,18 +66,15 @@ Route::prefix('admin')->name('admin.')->group(function() {
         Route::get('/dashboard', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
         Route::get('/dokumentasi', [App\Http\Controllers\DocumentationController::class, 'admin'])->name('documentation');
 
-        Route::get('/surat/masuk-eksternal', [App\Http\Controllers\Admin\LetterController::class, 'index'])
-            ->defaults('type', 'masuk-eksternal')
-            ->name('surat.incoming');
-        Route::get('/surat/keluar', [App\Http\Controllers\Admin\LetterController::class, 'index'])
-            ->defaults('type', 'keluar')
-            ->name('surat.outgoing');
+        Route::redirect('/surat/masuk-eksternal', '/admin/surat/internal');
+        Route::redirect('/surat/keluar', '/admin/surat/internal');
+        Route::redirect('/surat/arsip', '/admin/surat/internal');
         Route::get('/surat/internal', [App\Http\Controllers\Admin\LetterController::class, 'index'])
             ->defaults('type', 'internal')
             ->name('surat.internal');
-        Route::get('/surat/arsip', [App\Http\Controllers\Admin\LetterController::class, 'index'])
-            ->defaults('type', 'arsip')
-            ->name('surat.archive');
+        Route::redirect('/surat/create/masuk-eksternal', '/admin/surat/create/internal');
+        Route::redirect('/surat/create/keluar', '/admin/surat/create/internal');
+        Route::redirect('/surat/create/arsip', '/admin/surat/create/internal');
         Route::get('/surat/create/{mode}', [App\Http\Controllers\Admin\LetterController::class, 'create'])
             ->name('surat.create');
         Route::post('/surat', [App\Http\Controllers\Admin\LetterController::class, 'store'])
@@ -71,6 +83,12 @@ Route::prefix('admin')->name('admin.')->group(function() {
             ->name('surat.destroy-draft');
         Route::post('/surat/{letter}/revisi-pdf', [App\Http\Controllers\Admin\LetterController::class, 'reviseInternalPdf'])
             ->name('surat.revisi-pdf');
+        Route::get('/surat/{letter}/preview', [App\Http\Controllers\Admin\LetterController::class, 'preview'])
+            ->name('surat.preview');
+        Route::post('/surat/{letter}/download-otp', [App\Http\Controllers\Admin\LetterController::class, 'sendDownloadOtp'])
+            ->name('surat.download-otp');
+        Route::post('/surat/{letter}/download', [App\Http\Controllers\Admin\LetterController::class, 'download'])
+            ->name('surat.download');
         Route::get('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'show'])
             ->name('surat.show');
         Route::put('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'update'])
@@ -101,7 +119,6 @@ Route::prefix('admin')->name('admin.')->group(function() {
         Route::get('/disposisi', [App\Http\Controllers\Admin\DispositionController::class, 'index'])->name('dispositions.index');
         Route::post('/disposisi', [App\Http\Controllers\Admin\DispositionController::class, 'store'])->name('dispositions.store');
         Route::put('/disposisi/{disposition}', [App\Http\Controllers\Admin\DispositionController::class, 'update'])->name('dispositions.update');
-        Route::get('/notifikasi', [App\Http\Controllers\Admin\NotificationController::class, 'index'])->name('notifications.index');
 
         // route settings
         Route::get('/settings', [App\Http\Controllers\Admin\SettingController::class, 'index'])
@@ -112,6 +129,11 @@ Route::prefix('admin')->name('admin.')->group(function() {
             ->name('settings.update');
         Route::post('/settings/test-email', [App\Http\Controllers\Admin\SettingController::class, 'testEmail'])
             ->name('settings.test-email');
+        Route::get('/settings/watermark-sample', [App\Http\Controllers\Admin\SettingController::class, 'watermarkSample'])
+            ->name('settings.watermark-sample');
+
+        Route::get('/audit-trails', [App\Http\Controllers\Admin\AuditTrailController::class, 'index'])
+            ->name('audit-trails.index');
 
         // route resource untuk permission
         Route::resource('/permissions', App\Http\Controllers\Admin\PermissionController::class)->except(['show']);
@@ -122,128 +144,81 @@ Route::prefix('admin')->name('admin.')->group(function() {
         // route resource untuk user
         Route::resource('/users', App\Http\Controllers\Admin\UserController::class)->except(['show']);
 
-        // route resource untuk jenis surat
-        Route::resource('/letter-types', App\Http\Controllers\Admin\LetterTypeController::class)->except(['create', 'edit', 'show']);
-
     });
 
 });
 
 
 // ==============================================
-// ROUTES PEGAWAI PT BERDIKARI
+// ROUTES USER PT BERDIKARI
 // ==============================================
 
-Route::prefix('pegawai')->name('pegawai.')->middleware('auth')->group(function() {
-    Route::get('/dashboard', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
+Route::prefix('user')->name('user.')->middleware('auth')->group(function() {
+    Route::get('/dashboard', [App\Http\Controllers\User\PortalController::class, 'workspace'])
         ->defaults('section', 'dashboard')
         ->defaults('mode', 'index')
         ->name('dashboard');
 
-    Route::get('/dokumentasi', [App\Http\Controllers\DocumentationController::class, 'pegawai'])
-        ->name('documentation');
+    Route::redirect('/inbox/internal', '/user/surat')->name('inbox.internal');
+    Route::redirect('/inbox/tebusan', '/user/surat')->name('inbox.tebusan');
+    Route::redirect('/disposisi', '/user/surat')->name('disposisi');
 
-    Route::get('/inbox/internal', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'inbox')
-        ->defaults('mode', 'internal')
-        ->name('inbox.internal');
+    Route::redirect('/approval', '/user/surat')->name('approval.index');
 
-    Route::get('/inbox/tebusan', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'inbox')
-        ->defaults('mode', 'tebusan')
-        ->name('inbox.tebusan');
-
-    Route::get('/disposisi', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'inbox')
-        ->defaults('mode', 'disposisi')
-        ->name('disposisi');
-
-    Route::get('/approval', [App\Http\Controllers\Pegawai\PortalController::class, 'approvalIndex'])
-        ->name('approval.index');
-
-    Route::get('/approval/{signatureRequest}', [App\Http\Controllers\Pegawai\PortalController::class, 'approvalShow'])
+    Route::get('/approval/{signatureRequest}', [App\Http\Controllers\User\PortalController::class, 'approvalShow'])
         ->name('approval.show');
 
-    Route::post('/approval/{signatureRequest}/read', [App\Http\Controllers\Pegawai\PortalController::class, 'markApprovalRead'])
+    Route::post('/approval/{signatureRequest}/read', [App\Http\Controllers\User\PortalController::class, 'markApprovalRead'])
         ->name('approval.read');
 
-    Route::post('/approval/{signatureRequest}/otp', [App\Http\Controllers\Pegawai\PortalController::class, 'sendSignatureOtp'])
+    Route::post('/approval/{signatureRequest}/otp', [App\Http\Controllers\User\PortalController::class, 'sendSignatureOtp'])
         ->name('approval.otp');
 
-    Route::post('/approval/{signatureRequest}/approve', [App\Http\Controllers\Pegawai\PortalController::class, 'approveSignature'])
+    Route::post('/approval/{signatureRequest}/approve', [App\Http\Controllers\User\PortalController::class, 'approveSignature'])
         ->name('approval.approve');
 
-    Route::post('/approval/{signatureRequest}/reject', [App\Http\Controllers\Pegawai\PortalController::class, 'rejectSignature'])
-        ->name('approval.reject');
+    Route::redirect('/surat', '/user/dashboard')->name('surat.index');
 
-    Route::get('/notifikasi', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'notifications')
-        ->defaults('mode', 'index')
-        ->name('notifications');
-
-    Route::get('/surat', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'create_menu')
-        ->defaults('mode', 'index')
-        ->name('surat.index');
-
-    Route::get('/surat/internal', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
+    Route::get('/surat/create', [App\Http\Controllers\User\PortalController::class, 'workspace'])
         ->defaults('section', 'create')
         ->defaults('mode', 'internal')
-        ->name('surat.internal');
+        ->name('surat.create');
 
-    Route::get('/surat/keluar', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'create')
-        ->defaults('mode', 'outgoing')
-        ->name('surat.outgoing');
+    Route::redirect('/surat/internal', '/user/surat/create')->name('surat.internal');
 
-    Route::get('/surat/masuk-eksternal', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'create')
-        ->defaults('mode', 'incoming_external')
-        ->name('surat.incoming');
+    Route::redirect('/surat/keluar', '/user/surat');
+    Route::redirect('/surat/masuk-eksternal', '/user/surat');
+    Route::redirect('/surat/arsip', '/user/surat');
 
-    Route::get('/surat/arsip', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
-        ->defaults('section', 'create')
-        ->defaults('mode', 'archive')
-        ->name('surat.archive.create');
-
-    Route::post('/surat/internal', [App\Http\Controllers\Pegawai\PortalController::class, 'storeInternal'])
+    Route::post('/surat/internal', [App\Http\Controllers\User\PortalController::class, 'storeInternal'])
         ->name('surat.internal.store');
 
-    Route::post('/surat/keluar', [App\Http\Controllers\Pegawai\PortalController::class, 'storeOutgoing'])
-        ->name('surat.outgoing.store');
-
-    Route::post('/surat/masuk-eksternal', [App\Http\Controllers\Pegawai\PortalController::class, 'storeIncomingExternal'])
-        ->name('surat.incoming.store');
-
-    Route::post('/surat/arsip', [App\Http\Controllers\Pegawai\PortalController::class, 'storeArchive'])
-        ->name('surat.archive.store');
-
-    Route::get('/arsip', [App\Http\Controllers\Pegawai\PortalController::class, 'workspace'])
+    Route::get('/arsip', [App\Http\Controllers\User\PortalController::class, 'workspace'])
         ->defaults('section', 'archive')
         ->defaults('mode', 'index')
         ->name('archive');
 
-    Route::delete('/surat/{letter}', [App\Http\Controllers\Pegawai\PortalController::class, 'destroyDraft'])
+    Route::delete('/surat/{letter}', [App\Http\Controllers\User\PortalController::class, 'destroyDraft'])
         ->name('surat.destroy-draft');
 
-    Route::post('/surat/{letter}/publish', [App\Http\Controllers\Pegawai\PortalController::class, 'publishIncomingExternal'])
-        ->name('surat.publish');
-
-    Route::delete('/surat/{letter}/publish/{target}', [App\Http\Controllers\Pegawai\PortalController::class, 'revokeIncomingExternalPublication'])
-        ->name('surat.publish.revoke');
-
-    Route::post('/surat/{letter}/disposisi', [App\Http\Controllers\Pegawai\PortalController::class, 'storeDisposition'])
+    Route::post('/surat/{letter}/disposisi', [App\Http\Controllers\User\PortalController::class, 'storeDisposition'])
         ->name('surat.dispositions.store');
 
-    Route::post('/surat/{letter}/revisi-pdf', [App\Http\Controllers\Pegawai\PortalController::class, 'reviseInternalPdf'])
+    Route::post('/surat/{letter}/revisi-pdf', [App\Http\Controllers\User\PortalController::class, 'reviseInternalPdf'])
         ->name('surat.revisi-pdf');
 
-    Route::post('/disposisi/{disposition}/balas', [App\Http\Controllers\Pegawai\PortalController::class, 'replyDisposition'])
+    Route::get('/surat/{letter}/preview', [App\Http\Controllers\User\PortalController::class, 'preview'])
+        ->name('surat.preview');
+
+    Route::post('/surat/{letter}/download-otp', [App\Http\Controllers\User\PortalController::class, 'sendDownloadOtp'])
+        ->name('surat.download-otp');
+
+    Route::post('/surat/{letter}/download', [App\Http\Controllers\User\PortalController::class, 'download'])
+        ->name('surat.download');
+
+    Route::post('/disposisi/{disposition}/balas', [App\Http\Controllers\User\PortalController::class, 'replyDisposition'])
         ->name('dispositions.reply');
 
-    Route::get('/notifikasi/{notification}', [App\Http\Controllers\Pegawai\PortalController::class, 'openNotification'])
-        ->name('notifications.open');
-
-    Route::get('/surat/{letter}', [App\Http\Controllers\Pegawai\PortalController::class, 'detail'])
+    Route::get('/surat/{letter}', [App\Http\Controllers\User\PortalController::class, 'detail'])
         ->name('surat.detail');
 });

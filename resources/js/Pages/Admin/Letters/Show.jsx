@@ -1,6 +1,8 @@
-import { Head, router, useForm, usePage } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
-import { Download, Paperclip, Save, Send, Trash2, Upload } from "lucide-react";
+import PdfDocumentViewer from "@/Components/PdfDocumentViewer";
+import DocumentDownloadButton from "@/Components/DocumentDownloadButton";
+import { Trash2 } from "lucide-react";
 
 function formatInputDate(value) {
     if (!value) return "-";
@@ -32,199 +34,95 @@ function formatDate(value) {
 }
 
 function approvalTypeLabel(request) {
-    return request?.approval_type === "paraf" ? "Paraf" : "Tanda Tangan";
+    return "Tanda Tangan";
 }
 
-function approvalStatusLabel(status) {
+function visualTypeLabel(value) {
     return {
-        ready: "Siap diproses",
-        pending: "Menunggu",
-        signed: "Disetujui",
-        rejected: "Ditolak",
-    }[status] || status || "Menunggu";
+        qr: "QR Code Sistem",
+        saved_signature: "Spesimen Tersimpan",
+        uploaded_signature: "Upload Gambar",
+    }[value] || "QR Code Sistem";
 }
 
-function approvalRows(letter) {
-    const versions = letter.document_versions || [];
-    if (versions.length) {
-        return versions.flatMap((version) => {
-            const requests = version.signature_requests || [];
+function locationLabel(request) {
+    const parts = [request.signed_city, request.signed_region, request.signed_country].filter(Boolean);
+    const coordinates = request.signed_latitude && request.signed_longitude
+        ? `${request.signed_latitude}, ${request.signed_longitude}`
+        : null;
 
-            return requests.length
-                ? requests.map((request) => [
-                    `Versi ${version.version_number} · ${approvalTypeLabel(request)} ${request.signing_order}: ${request.signer?.name || "-"}`,
-                    request.approval_type === "paraf" ? "Approval sistem tanpa QR" : `Halaman ${request.page_number}`,
-                    approvalStatusLabel(request.status),
-                    request.signed_at ? `Disetujui ${formatDate(request.signed_at)}` : (request.rejected_at ? `Ditolak ${formatDate(request.rejected_at)}` : "Belum diproses"),
-                    request.note ? `Catatan: ${request.note}` : "",
-                ])
-                : [[`Versi ${version.version_number}`, "Belum ada approval"]];
-        });
+    if (parts.length && coordinates) {
+        return `${parts.join(", ")} (${coordinates})`;
     }
 
-    return (letter.signature_requests || []).map((request) => [
-        `${approvalTypeLabel(request)} ${request.signing_order}: ${request.signer?.name || "-"}`,
-        request.approval_type === "paraf" ? "Approval sistem tanpa QR" : `Halaman ${request.page_number}`,
-        approvalStatusLabel(request.status),
-        request.signed_at ? `Disetujui ${formatDate(request.signed_at)}` : (request.rejected_at ? `Ditolak ${formatDate(request.rejected_at)}` : "Belum diproses"),
-        request.note ? `Catatan: ${request.note}` : "",
-    ]);
-}
-
-function versionRows(letter) {
-    return (letter.document_versions || []).map((version) => [
-        `Versi ${version.version_number}`,
-        `Status: ${version.status || "-"}`,
-        `Uploader: ${version.uploader?.name || "-"}`,
-        `Upload: ${formatDate(version.created_at)}`,
-        version.source_pdf_path ? `PDF sumber: /storage/${version.source_pdf_path}` : "",
-        version.signed_pdf_path ? `PDF signed: /storage/${version.signed_pdf_path}` : "",
-        version.rejection_note ? `Reject: ${version.rejection_note}` : "",
-    ]);
+    return parts.join(", ") || coordinates || "-";
 }
 
 export default function LetterShow() {
-    const { letter, notifications, targetOptions = {}, dispositionTargetOptions = {}, auth } = usePage().props;
-    const isIncomingExternal = letter.type === "incoming_external";
+    const { letter, auth, hasPreview = false, previewUrl, downloadOtpRequired = true } = usePage().props;
     const isInternal = letter.type === "internal";
-    const isOutgoing = letter.type === "outgoing";
-    const { data, setData, put, processing } = useForm({
-        status: letter.status,
-        letter_number: letter.letter_number || "",
-    });
-    const revisionForm = useForm({
-        revision_flow: "reuse",
-        scan_file: null,
-    });
-    const dispositionForm = useForm({
-        letter_id: letter.id,
-        target_type: "directorate",
-        target_id: "",
-        note: "",
-        status: "open",
-    });
-    const submit = (e) => {
-        e.preventDefault();
-        put(`/admin/surat/${letter.id}`, { preserveScroll: true });
-    };
-    const submitDisposition = (e) => {
-        e.preventDefault();
-        dispositionForm.post("/admin/disposisi", {
-            preserveScroll: true,
-            onSuccess: () => dispositionForm.reset("target_id", "note"),
-        });
-    };
-    const submitRevision = (e) => {
-        e.preventDefault();
-        revisionForm.post(`/admin/surat/${letter.id}/revisi-pdf`, { preserveScroll: true });
-    };
     const canDeleteDraft = letter.status === "draft" && String(letter.created_by) === String(auth?.user?.id);
-    const currentVersionPath = letter.current_version?.signed_pdf_path
-        || letter.current_version?.source_pdf_path
-        || letter.signed_pdf_path
-        || letter.attachments?.[0]?.file_path;
-    const canUploadRevision =
-        isInternal &&
-        String(letter.created_by) === String(auth?.user?.id) &&
-        letter.signature_status === "rejected" &&
-        (letter.signature_requests || []).length > 0;
+    const downloadFileName = `${letter.letter_number || "dokumen"}.pdf`;
 
     return (
         <>
             <Head title={`${letter.subject} - Admin`} />
             <LayoutAdmin>
-                <div className="grid gap-6 xl:grid-cols-3">
-                    <div className="space-y-6 xl:col-span-2">
-                        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                            <h1 className="text-2xl font-bold text-gray-950">{letter.subject}</h1>
-                            <p className="mt-2 text-sm text-gray-500">{isIncomingExternal ? (letter.letter_number || "-") : letter.reference} · {letter.letter_type?.name || "Tanpa jenis"} · {letter.type} · {letter.page_count || 1} halaman</p>
+                <div className="space-y-6">
+                    <div className="grid gap-6 xl:grid-cols-12">
+                        <div className="space-y-6 xl:col-span-8">
+                        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h1 className="break-words text-xl font-bold text-gray-950 sm:text-2xl">{letter.subject}</h1>
+                                {letter.status === "draft" ? <DraftBadge /> : null}
+                            </div>
+                            <p className="mt-2 text-sm text-gray-500">{letter.letter_number || "-"} · Dokumen</p>
                         </div>
                         {canDeleteDraft ? (
                             <div className="flex justify-end">
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        if (confirm("Hapus draft surat ini?")) router.delete(`/admin/surat/${letter.id}`);
+                                        if (confirm("Hapus draft dokumen ini?")) router.delete(`/admin/surat/${letter.id}`);
                                     }}
-                                    className="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100"
+                                    className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto"
                                 >
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Hapus Draft
                                 </button>
                             </div>
                         ) : null}
-                        {currentVersionPath ? (
-                            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                                <iframe title="Preview PDF" src={`/storage/${currentVersionPath}`} className="h-[520px] md:h-[720px] w-full bg-gray-100" />
-                            </div>
+                        {hasPreview ? (
+                            <>
+                                <Panel title="Preview Surat">
+                                    <PdfDocumentViewer fileUrl={previewUrl || `/admin/surat/${letter.id}/preview`} className="h-[520px] md:h-[680px]" />
+                                </Panel>
+                                <div className="flex justify-end">
+                                    <DocumentDownloadButton
+                                        otpUrl={`/admin/surat/${letter.id}/download-otp`}
+                                        downloadUrl={`/admin/surat/${letter.id}/download`}
+                                        otpRequired={downloadOtpRequired}
+                                        fileName={downloadFileName}
+                                        className="w-full justify-center sm:w-auto"
+                                    />
+                                </div>
+                            </>
                         ) : (
                             <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                                <div className="text-sm text-gray-500">Belum ada file scan PDF.</div>
+                                <div className="text-sm text-gray-500">Preview tidak tersedia.</div>
                             </div>
                         )}
-                        <AttachmentPanel attachments={letter.attachments || []} />
-                        <Panel title="Informasi Surat" rows={[
+                        </div>
+                        <div className="space-y-6 xl:col-span-4">
+                        <Panel title="Informasi Dokumen" rows={[
                             ["Nomor Surat", letter.letter_number || "-"],
-                            ["Jenis Surat", letter.letter_type?.name || "-"],
                             ["Diinput oleh", letter.creator?.name || "-"],
                             ["Tanggal input", formatInputDate(letter.created_at)],
                             ["Jam input", formatInputTime(letter.created_at)],
-                            ...(!isIncomingExternal ? [["Status", letter.status]] : []),
-                            ...(letter.payload?.origin_name ? [["Asal Surat", letter.payload.origin_name]] : []),
-                            ...(letter.payload?.internal_origin_name ? [["Asal Surat", letter.payload.internal_origin_name]] : []),
-                            ...(letter.payload?.external_recipient ? [["Tujuan Eksternal", letter.payload.external_recipient]] : []),
                             ...(letter.payload?.notes ? [["Catatan", letter.payload.notes]] : []),
                         ]} />
-                        {!isIncomingExternal ? <Panel title="Target dan Tebusan" rows={letter.targets?.map((x) => [x.kind === "cc" ? "Tembusan" : "Tujuan", targetLabel(x, targetOptions)])} /> : null}
-                        {isInternal ? <Panel title="Approval Dokumen" rows={approvalRows(letter)} /> : null}
-                        {isInternal ? <Panel title="Riwayat Versi Dokumen" rows={versionRows(letter)} /> : null}
-                        {!isInternal && !isOutgoing ? <Panel title="Disposisi" rows={letter.dispositions?.map((x) => [
-                            `Dari: ${x.from_user?.name || "-"}`,
-                            `Tujuan: ${targetLabel(x, targetOptions)}`,
-                            x.status,
-                            x.note || "-",
-                        ])} /> : null}
-                    </div>
-                    <div className="space-y-6">
-                        <form onSubmit={submit} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                            <h2 className="font-semibold text-gray-950">Update Surat</h2>
-                            <label className="mt-4 block text-sm font-medium text-gray-700">Nomor Surat</label>
-                            <input value={data.letter_number} onChange={(e) => setData("letter_number", e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" />
-                            {!isIncomingExternal ? (
-                                <>
-                                    <label className="mt-4 block text-sm font-medium text-gray-700">Status</label>
-                                    <select value={data.status} onChange={(e) => setData("status", e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm">
-                                        {["draft", "sent", "received", "disposed", "archived", "rejected"].map((s) => <option key={s}>{s}</option>)}
-                                    </select>
-                                </>
-                            ) : null}
-                            <button disabled={processing} className="mt-4 inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white"><Save className="mr-2 h-4 w-4" />Simpan</button>
-                        </form>
-                        <DispositionForm
-                            form={dispositionForm}
-                            onSubmit={submitDisposition}
-                            targetOptions={dispositionTargetOptions}
-                            processing={dispositionForm.processing}
-                        />
-                        <Panel title="Status Baca" rows={letter.read_receipts?.map((x) => [x.user?.name || "-", x.read_at || "belum dibaca"])} />
-                        {canUploadRevision ? (
-                            <form onSubmit={submitRevision} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                                <h2 className="font-semibold text-gray-950">Upload PDF Revisi</h2>
-                                <p className="mt-1 text-sm text-gray-500">Approval ditolak. Upload PDF baru untuk menjalankan ulang alur approval sebelumnya.</p>
-                                <input
-                                    type="file"
-                                    accept="application/pdf,.pdf"
-                                    onChange={(event) => revisionForm.setData("scan_file", event.target.files?.[0] || null)}
-                                    className="mt-4 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                                />
-                                {revisionForm.errors.scan_file ? <div className="mt-2 text-xs text-red-600">{revisionForm.errors.scan_file}</div> : null}
-                                <button disabled={revisionForm.processing || !revisionForm.data.scan_file} className="mt-4 inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                                    <Upload className="mr-2 h-4 w-4" />
-                                    Upload Revisi
-                                </button>
-                            </form>
-                        ) : null}
-                        <Panel title="Informasi Halaman" rows={[[`${letter.page_count || 1} Halaman`, `Lampiran: ${letter.page_count || 1} Halaman`]]} />
+                        {isInternal ? <ApprovalPanel requests={letter.signature_requests || []} /> : null}
+                        </div>
                     </div>
                 </div>
             </LayoutAdmin>
@@ -232,74 +130,65 @@ export default function LetterShow() {
     );
 }
 
-function DispositionForm({ form, onSubmit, targetOptions, processing }) {
-    const options = optionsByType(form.data.target_type, targetOptions);
-    const targetTypes = availableDispositionTypes(targetOptions);
-
+function Panel({ title, rows = [], children }) {
     return (
-        <form onSubmit={onSubmit} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="font-semibold text-gray-950">Input Disposisi</h2>
-            <label className="mt-4 block text-sm font-medium text-gray-700">Tujuan</label>
-            <select value={form.data.target_type} onChange={(e) => form.setData({ ...form.data, target_type: e.target.value, target_id: "" })} className="mt-2 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm">
-                {targetTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
-            </select>
-            <select value={form.data.target_id} onChange={(e) => form.setData("target_id", e.target.value)} className="mt-3 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm">
-                <option value="">Pilih tujuan</option>
-                {options.map((option) => <option key={`${form.data.target_type}-${option.id}`} value={option.id}>{option.label}</option>)}
-            </select>
-            {form.errors.target_id || form.errors.target_type ? <div className="mt-2 text-xs text-red-600">{form.errors.target_id || form.errors.target_type}</div> : null}
-            <label className="mt-4 block text-sm font-medium text-gray-700">Catatan</label>
-            <textarea rows={4} value={form.data.note} onChange={(e) => form.setData("note", e.target.value)} className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm" />
-            <button disabled={processing || !form.data.target_id} className="mt-4 inline-flex items-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"><Send className="mr-2 h-4 w-4" />Kirim Disposisi</button>
-        </form>
-    );
-}
-
-function availableDispositionTypes(options = {}) {
-    const configured = options.targetTypes || ["directorate", "division_gm", "department_manager"];
-    return configured.map((type) => ({
-        id: type,
-        name: {
-            directorate: "Direktur",
-            division: "Divisi",
-            division_gm: "General Manager",
-            department_manager: "Manager",
-            department: "Department",
-            user: "User",
-        }[type] || type,
-    }));
-}
-
-function Panel({ title, rows = [] }) {
-    return <div className="min-w-0 rounded-lg border border-gray-200 bg-white p-5 shadow-sm"><h2 className="font-semibold text-gray-950">{title}</h2><div className="mt-4 space-y-2">{rows.length ? rows.map((row, i) => <div key={i} className="min-w-0 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 break-words">{row.join(" · ")}</div>) : <div className="text-sm text-gray-500">Tidak ada data.</div>}</div></div>;
-}
-
-function AttachmentPanel({ attachments = [] }) {
-    return (
-        <div className="min-w-0 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-            <h2 className="font-semibold text-gray-950">Lampiran</h2>
-            <div className="mt-4 space-y-3">
-                {attachments.length ? attachments.map((attachment) => (
-                    <a key={attachment.id} href={`/storage/${attachment.file_path}`} target="_blank" rel="noreferrer" className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3 text-sm hover:border-emerald-300">
-                        <span className="flex min-w-0 items-center gap-2 font-medium text-gray-900">
-                            <Paperclip className="h-4 w-4 shrink-0 text-gray-500" />
-                            <span className="break-words">{attachment.file_name}</span>
-                        </span>
-                        <Download className="h-4 w-4 shrink-0 text-gray-500" />
-                    </a>
-                )) : <div className="text-sm text-gray-500">Tidak ada lampiran.</div>}
+        <div className="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="font-semibold text-gray-950">{title}</h2>
+            <div className="mt-4 space-y-2">
+                {children || (rows.length ? rows.map((row, i) => (
+                    <div key={i} className="min-w-0 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 break-words">
+                        {row.join(" · ")}
+                    </div>
+                )) : <div className="text-sm text-gray-500">Tidak ada data.</div>)}
             </div>
         </div>
     );
 }
 
-function optionsByType(type, options) {
-    if (type === "user") return (options.users || []).map((user) => ({ id: user.id, label: `${user.name}${user.position ? ` - ${user.position}` : ""}` }));
-    if (type === "directorate") return (options.directorates || []).map((unit) => ({ id: unit.id, label: `${unit.name}${unit.director?.name ? ` - ${unit.director.name}` : ""}` }));
-    if (type === "division" || type === "division_gm") return (options.divisions || []).map((unit) => ({ id: unit.id, label: `${unit.name}${type === "division_gm" && unit.general_manager?.name ? ` - ${unit.general_manager.name}` : ""}` }));
-    return (options.departments || []).map((unit) => ({ id: unit.id, label: `${unit.name}${type === "department_manager" && unit.manager?.name ? ` - ${unit.manager.name}` : ""}` }));
+function ApprovalPanel({ requests = [] }) {
+    return (
+        <div className="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="font-semibold text-gray-950">Approval Dokumen</h2>
+            <div className="mt-4 space-y-3">
+                {requests.length ? requests.map((request) => (
+                    <div key={request.id || `${request.signer_user_id}-${request.signing_order}`} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <div className="text-sm font-semibold text-gray-950">
+                                    {approvalTypeLabel(request)} {request.signing_order || "-"}
+                                </div>
+                                <div className="mt-0.5 text-sm text-gray-600">{request.signer?.name || "-"}</div>
+                            </div>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 ring-1 ring-gray-200">
+                                Halaman {request.page_number || "-"}
+                            </span>
+                        </div>
+
+                        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+                            <ApprovalField label="Posisi" value={`${(Number(request.x || 0) * 100).toFixed(1)}%, ${(Number(request.y || 0) * 100).toFixed(1)}%`} />
+                            <ApprovalField label="Visual" value={visualTypeLabel(request.signature_visual_type)} />
+                            <ApprovalField label="Waktu tanda tangan" value={request.signed_at ? formatDate(request.signed_at) : "-"} />
+                            <ApprovalField label="IP address" value={request.signed_ip_address || "-"} />
+                            <ApprovalField label="Device" value={request.signed_device || "-"} />
+                            <ApprovalField label="Lokasi" value={locationLabel(request)} />
+                            <ApprovalField label="Sumber lokasi" value={request.signed_location_source || "-"} />
+                        </dl>
+                    </div>
+                )) : <div className="text-sm text-gray-500">Tidak ada data.</div>}
+            </div>
+        </div>
+    );
 }
 
-function targetLabel(target, options) {
-    return optionsByType(target.target_type, options).find((option) => String(option.id) === String(target.target_id))?.label || `${target.target_type}: ${target.target_id}`;
+function ApprovalField({ label, value }) {
+    return (
+        <div className="min-w-0">
+            <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</dt>
+            <dd className="mt-1 break-words text-gray-700">{value || "-"}</dd>
+        </div>
+    );
+}
+
+function DraftBadge() {
+    return <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Draft</span>;
 }

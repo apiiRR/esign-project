@@ -1,52 +1,53 @@
 import { Head, Link, usePage } from "@inertiajs/react";
 import LayoutAdmin from "@/Layouts/LayoutAdmin";
 import { appName } from "@/Utils/appIdentity";
-import { BookOpen, FileText, Network, Settings, Shield, Users } from "lucide-react";
+import { BookOpen, FileSignature, FileText, Settings, Shield, Users } from "lucide-react";
 
 const sections = [
     {
-        title: "Monitoring Surat",
+        title: "Dashboard dan Dokumen",
         icon: FileText,
         items: [
-            "Dashboard menampilkan ringkasan surat masuk eksternal, surat internal, arsip scan, user, unit organisasi, disposisi, dan notifikasi.",
-            "Menu Surat memisahkan Surat Masuk Eksternal, Surat Internal, dan Arsip Surat agar proses operasional lebih mudah dipantau.",
-            "Detail surat menampilkan metadata, jenis surat, nomor surat, status, lampiran, target, tembusan, disposisi, status baca, dan log notifikasi.",
+            "Dashboard admin menampilkan total dokumen, total user, kumpulan dokumen, dan user terdaftar.",
+            "Menu Dokumen hanya menampilkan dokumen internal.",
+            "Detail dokumen menampilkan nomor dokumen, perihal, status, pembuat, lampiran PDF, versi dokumen, dan status tanda tangan.",
         ],
     },
     {
-        title: "Master Data",
-        icon: Network,
+        title: "Alur Tanda Tangan QR",
+        icon: FileSignature,
         items: [
-            "Direktorat, Divisi, dan Department dipakai sebagai struktur akses surat dan target disposisi.",
-            "Kode unit tidak ditampilkan di UI master organisasi, tetapi tetap dipakai untuk identitas internal unit.",
-            "Pejabat unit dapat diisi dari master data atau tersinkron otomatis saat user diberi jabatan Direktur, General Manager, atau Manager.",
+            "Form dokumen memakai Nomor Dokumen, Perihal, File Scan PDF, mode tanda tangan, dan daftar penanda tangan.",
+            "Mode Berurutan membuka penanda tangan pertama lebih dulu, lalu membuka penanda tangan berikutnya setelah yang sebelumnya selesai.",
+            "Mode Tidak Berurutan membuka semua penanda tangan sekaligus.",
+            "Setiap penanda tangan wajib memiliki posisi QR pada PDF saat dokumen dikirim.",
         ],
     },
     {
         title: "User, Role, dan Hak Akses",
         icon: Users,
         items: [
-            "Role global hanya admin dan pegawai. Jabatan organisasi bukan role akses.",
-            "Unit kerja user menentukan direktorat, divisi, dan department user berada.",
-            "Jabatan organisasi mengisi pejabat unit terkait: Direktur pada direktorat, General Manager pada divisi, Manager pada department.",
+            "Admin mengelola nama, email, username, posisi, status akun, role, dan password user.",
+            "Role akses fleksibel dan dapat dibuat sesuai kebutuhan operasional.",
+            "Permission aktif ditampilkan dengan deskripsi fungsi agar admin memahami dampak tiap hak akses.",
         ],
     },
     {
-        title: "Jenis Surat dan Nomor Manual",
+        title: "Flow yang Disederhanakan",
         icon: Shield,
         items: [
-            "Jenis Surat wajib dipilih saat membuat surat baru.",
-            "Master Jenis Surat hanya menyimpan nama, deskripsi, dan status aktif.",
-            "Nomor publik surat diisi manual oleh user pada field Nomor Surat.",
-            "Reference internal tetap dibuat sistem untuk kebutuhan teknis dan relasi data.",
+            "Form dokumen baru berfokus pada data inti dokumen dan alur tanda tangan QR.",
+            "Portal user berfokus pada Dashboard User dan menu Dokumen.",
+            "Dokumentasi operasional hanya tersedia untuk admin.",
         ],
     },
     {
-        title: "Settings, Log, dan Notifikasi",
+        title: "Settings",
         icon: Settings,
         items: [
-            "Settings disederhanakan untuk kebutuhan aplikasi: nama aplikasi, nama perusahaan, kode perusahaan, dan logo.",
-            "Log Viewer digunakan admin untuk membaca error teknis Laravel. Notifikasi disimpan sebagai log saat surat dikirim ke penerima.",
+            "Settings berisi identitas aplikasi, logo perusahaan, konfigurasi SMTP, dan OTP tanda tangan elektronik.",
+            "OTP tanda tangan dapat diaktifkan untuk mewajibkan kode email saat approve atau reject tanda tangan.",
+            "Log Viewer tetap tersedia dari dropdown admin untuk membaca error teknis Laravel.",
         ],
     },
 ];
@@ -67,7 +68,7 @@ export default function AdminDocumentation() {
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-950">Dokumentasi Admin</h1>
                                 <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                                    Panduan operasional admin untuk mengelola user, master data, surat, notifikasi, log teknis, dan pengaturan aplikasi {appName(settings)}.
+                                    Panduan operasional admin untuk flow dokumen internal, tanda tangan QR, user, role, hak akses, dan pengaturan aplikasi {appName(settings)}.
                                 </p>
                             </div>
                         </div>

@@ -8,7 +8,7 @@ import LayoutAdmin from "@/Layouts/LayoutAdmin";
 import hasAnyPermission from "@/Utils/Permission";
 
 // import icons
-import { Edit } from "lucide-react";
+import { Edit, Plus } from "lucide-react";
 
 // import component PageHeader
 import PageHeader from "@/Shared/PageHeader";
@@ -35,19 +35,44 @@ export default function RolesIndex() {
 
                 {/* Header */}
                 <div className="mb-8">
-                    <PageHeader
-                        title="Roles"
-                        description="Role global dikunci hanya untuk admin dan pegawai. Halaman ini digunakan untuk mengatur hak aksesnya."
-                    />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <PageHeader
+                            title="Roles"
+                            description="Kelola role akses dan permission untuk setiap role."
+                        />
+                        {hasAnyPermission(['roles.create']) ? (
+                            <Link href="/admin/roles/create" className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 sm:w-auto">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Tambah Role
+                            </Link>
+                        ) : null}
+                    </div>
                 </div>
 
                 {/* Card */}
-                <div className="p-6 bg-white rounded-xl shadow-sm">
+                <div className="rounded-xl bg-white p-4 shadow-sm sm:p-6">
 
                     <Search URL={'/admin/roles'} />
 
                     {/* Table */}
-                    <div className="overflow-x-auto border border-gray-200 rounded-lg mt-5">
+                    <div className="mt-5 grid gap-3 md:hidden">
+                        {roles && roles.data.length > 0 ? roles.data.map((role, index) => (
+                            <div key={role.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                                <div className="text-xs font-semibold text-gray-500">#{++index + (roles.current_page - 1) * roles.per_page}</div>
+                                <div className="mt-1 break-words text-base font-semibold text-gray-950">{role.name}</div>
+                                <div className="mt-2 text-sm text-gray-600">{role.permissions_count} permission</div>
+                                {hasAnyPermission(['roles.edit']) ? (
+                                    <Link href={`/admin/roles/${role.id}/edit`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-600">
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit
+                                    </Link>
+                                ) : null}
+                            </div>
+                        )) : (
+                            <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">Tidak ada role.</div>
+                        )}
+                    </div>
+                    <div className="mt-5 hidden overflow-x-auto rounded-lg border border-gray-200 md:block">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>

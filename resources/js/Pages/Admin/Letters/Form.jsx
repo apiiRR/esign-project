@@ -9,20 +9,12 @@ export default function LetterForm() {
     const pageProps = usePage().props;
     const {
         type,
-        letterTypes = [],
         targetOptions = {},
-        auth,
         isArchive = false,
         errors: serverErrors = {},
     } = pageProps;
-    const isIncomingExternal = type === "incoming_external" && !isArchive;
     const isInternal = type === "internal";
-    const isOutgoing = type === "outgoing";
-    const supportsDraftSend = isInternal || isOutgoing;
-    const originOptions = internalOriginOptions(auth?.user);
-    const defaultOrigin = originOptions[0] || { type: "", id: "", name: "" };
-    const [recipientDraft, setRecipientDraft] = useState({ target_type: "department", target_id: "" });
-    const [ccDraft, setCcDraft] = useState({ target_type: "department", target_id: "" });
+    const supportsDraftSend = true;
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [clientErrors, setClientErrors] = useState([]);
@@ -32,6 +24,7 @@ export default function LetterForm() {
         type,
         is_archive: isArchive,
         submit_action: "send",
+        signature_flow: "sequential",
         letter_type_id: "",
         letter_number: "",
         subject: "",
@@ -39,24 +32,13 @@ export default function LetterForm() {
         targets: [],
         cc_targets: [],
         signature_requests: [],
-        payload: {
-            origin_name: "",
-            internal_origin_type: defaultOrigin.type,
-            internal_origin_id: defaultOrigin.rawId,
-            internal_origin_name: defaultOrigin.name,
-            external_recipient: "",
-            notes: "",
-        },
+        payload: { notes: "" },
     });
     const formErrors = { ...serverErrors, ...errors };
 
     useEffect(() => () => {
         if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
     }, [pdfPreviewUrl]);
-
-    function updatePayload(key, value) {
-        setData("payload", { ...data.payload, [key]: value });
-    }
 
     function handleFile(file) {
         if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
@@ -83,38 +65,12 @@ export default function LetterForm() {
     }
 
     function normalizeSignatureRequests(requests) {
-        const grouped = [
-            ...requests.filter((request) => request.approval_type === "paraf"),
-            ...requests.filter((request) => (request.approval_type || "signature") === "signature"),
-        ];
-        let signatureNumber = 0;
-
-        return grouped.map((request, index) => {
-            const isSignatureRequest = (request.approval_type || "signature") === "signature";
-            if (isSignatureRequest) signatureNumber += 1;
-
-            return {
-                ...request,
-                approval_type: request.approval_type || "signature",
-                signing_order: index + 1,
-                signature_number: isSignatureRequest ? signatureNumber : null,
-            };
-        });
-    }
-
-    function addParafRequest() {
-        if (!isInternal) return;
-        const signer = (targetOptions.users || [])[0];
-
-        setData("signature_requests", normalizeSignatureRequests([
-            ...data.signature_requests,
-            {
-                local_id: `${Date.now()}-${data.signature_requests.length}`,
-                approval_type: "paraf",
-                signer_user_id: signer?.id || "",
-                signing_order: data.signature_requests.length + 1,
-            },
-        ]));
+        return requests.map((request, index) => ({
+            ...request,
+            approval_type: "signature",
+            signing_order: index + 1,
+            signature_number: index + 1,
+        }));
     }
 
     function addSignatureRequest(placement) {
@@ -158,27 +114,20 @@ export default function LetterForm() {
         setData("signature_requests", normalizeSignatureRequests(reordered));
     }
 
-    function addTarget(kind) {
-        const draft = kind === "recipient" ? recipientDraft : ccDraft;
-        if (!draft.target_id) return;
-        const field = kind === "recipient" ? "targets" : "cc_targets";
-        const exists = data[field].some((target) => target.target_type === draft.target_type && String(target.target_id) === String(draft.target_id));
-        if (exists) return;
-        setData(field, [...data[field], { target_type: draft.target_type, target_id: Number(draft.target_id) }]);
-        kind === "recipient" ? setRecipientDraft({ ...draft, target_id: "" }) : setCcDraft({ ...draft, target_id: "" });
-    }
-
-    function removeTarget(field, index) {
-        setData(field, data[field].filter((_, itemIndex) => itemIndex !== index));
-    }
-
     function submit(event, action = "send") {
         event.preventDefault();
         setClientErrors([]);
-        if (isInternal) {
-            const invalidSignature = data.signature_requests.find((request) => !request.signer_user_id);
+        if (isInternal && action === "send") {
+            if (!data.signature_requests.length) {
+                const message = "Tambahkan minimal satu penanda tangan.";
+                setClientErrors([message]);
+                window.alert(message);
+                return;
+            }
+
+            const invalidSignature = data.signature_requests.find((request) => !request.signer_user_id || !request.page_number || request.x === undefined || request.y === undefined || !request.width || !request.height);
             if (invalidSignature) {
-                const message = "Pilih user untuk semua paraf dan tanda tangan.";
+                const message = "Pilih user dan posisi QR untuk semua penanda tangan.";
                 setClientErrors([message]);
                 window.alert(message);
                 return;
@@ -197,13 +146,9 @@ export default function LetterForm() {
         });
     }
 
-    const title = isArchive ? "Upload Arsip Surat" : isIncomingExternal ? "Buat Surat Masuk Eksternal" : isOutgoing ? "Buat Surat Keluar" : "Buat Surat Internal";
-    const description = isArchive
-        ? "Upload scan surat untuk disimpan sebagai arsip sistem."
-        : isIncomingExternal
-          ? "Input metadata surat dari pihak luar dan upload scan PDF."
-          : "Input metadata surat dan upload scan PDF.";
-    const backUrl = isArchive ? "/admin/surat/arsip" : isIncomingExternal ? "/admin/surat/masuk-eksternal" : isOutgoing ? "/admin/surat/keluar" : "/admin/surat/internal";
+    const title = "Buat Dokumen";
+    const description = "Input metadata dokumen internal dan upload PDF.";
+    const backUrl = "/admin/surat/internal";
 
     return (
         <>
@@ -220,25 +165,10 @@ export default function LetterForm() {
                     <div className="grid gap-6 xl:grid-cols-12">
                         <div className="min-w-0 space-y-5 xl:col-span-6">
                             <Card className="space-y-4">
-                                <Select label="Jenis Surat" value={data.letter_type_id} onChange={(value) => setData("letter_type_id", value)} options={letterTypes.map((letterType) => ({ id: letterType.id, name: letterType.name }))} error={formErrors.letter_type_id} />
-                                <Field label="Nomor Surat" value={data.letter_number} onChange={(value) => setData("letter_number", value)} error={formErrors.letter_number} placeholder={isIncomingExternal ? "Masukkan nomor surat dari dokumen eksternal" : "Opsional"} />
+                                <Field label="Nomor Dokumen" value={data.letter_number} onChange={(value) => setData("letter_number", value)} error={formErrors.letter_number} placeholder="Opsional" />
                                 <Field label="Perihal" value={data.subject} onChange={(value) => setData("subject", value)} error={formErrors.subject} placeholder="Perihal surat" />
-                                {isInternal || isOutgoing ? <Select label="Asal Surat" value={`${data.payload.internal_origin_type}:${data.payload.internal_origin_id}`} onChange={(value) => {
-                                    const selected = originOptions.find((option) => option.id === value);
-                                    if (!selected) return;
-                                    setData("payload", { ...data.payload, internal_origin_type: selected.type, internal_origin_id: selected.rawId, internal_origin_name: selected.name });
-                                }} options={originOptions} error={formErrors["payload.internal_origin_type"] || formErrors["payload.internal_origin_id"]} noPlaceholder /> : null}
-                                {isOutgoing ? <Field label="Tujuan Eksternal" value={data.payload.external_recipient} onChange={(value) => updatePayload("external_recipient", value)} error={formErrors["payload.external_recipient"]} placeholder="Nama perusahaan/instansi penerima" /> : null}
-                                {isIncomingExternal ? <Field label="Asal Surat" value={data.payload.origin_name} onChange={(value) => updatePayload("origin_name", value)} error={formErrors["payload.origin_name"]} placeholder="Nama instansi/perusahaan pengirim" /> : null}
-                                {isIncomingExternal || isArchive ? <Textarea label="Catatan" value={data.payload.notes} onChange={(value) => updatePayload("notes", value)} rows={4} error={formErrors["payload.notes"]} placeholder="Catatan tambahan" /> : null}
+                                <Select label="Alur Tanda Tangan" value={data.signature_flow} onChange={(value) => setData("signature_flow", value)} options={[{ id: "sequential", name: "Berurutan" }, { id: "parallel", name: "Tidak Berurutan" }]} error={formErrors.signature_flow} noPlaceholder />
                             </Card>
-
-                            {isInternal || isOutgoing ? (
-                                <>
-                                    {isInternal ? <TargetPicker title="Tujuan" draft={recipientDraft} setDraft={setRecipientDraft} targets={data.targets} field="targets" targetOptions={targetOptions} onAdd={() => addTarget("recipient")} onRemove={removeTarget} error={formErrors.targets} /> : null}
-                                    <TargetPicker title="Tembusan" draft={ccDraft} setDraft={setCcDraft} targets={data.cc_targets} field="cc_targets" targetOptions={targetOptions} onAdd={() => addTarget("cc")} onRemove={removeTarget} />
-                                </>
-                            ) : null}
 
                             <Card>
                                 <label className="block text-sm font-semibold text-gray-900">File Scan PDF</label>
@@ -258,7 +188,6 @@ export default function LetterForm() {
                                 <SignatureRequestPanel
                                     requests={data.signature_requests}
                                     signerOptions={targetOptions.users || []}
-                                    onAddParaf={addParafRequest}
                                     onUpdate={updateSignatureRequest}
                                     onRemove={removeSignatureRequest}
                                     onMove={moveSignatureRequest}
@@ -269,15 +198,15 @@ export default function LetterForm() {
                                 />
                             ) : null}
 
-                            <div className="flex flex-wrap justify-end gap-3">
-                                {supportsDraftSend ? <button type="button" disabled={submitting} onClick={(event) => submit(event, "draft")} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"><Archive className="mr-2 h-4 w-4" />{submitting ? "Menyimpan..." : "Simpan Draft"}</button> : null}
-                                <Link href={backUrl} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Batal</Link>
-                                <button type="submit" disabled={submitting} className="inline-flex items-center rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"><Send className="mr-2 h-4 w-4" />{submitting ? "Menyimpan..." : supportsDraftSend ? "Send" : isArchive ? "Simpan Arsip" : "Simpan Surat"}</button>
+                            <div className="grid gap-3 sm:flex sm:flex-wrap sm:justify-end">
+                                {supportsDraftSend ? <button type="button" disabled={submitting} onClick={(event) => submit(event, "draft")} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"><Archive className="mr-2 h-4 w-4" />{submitting ? "Menyimpan..." : "Simpan Draft"}</button> : null}
+                                <Link href={backUrl} className="inline-flex min-h-11 items-center justify-center rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">Batal</Link>
+                                <button type="submit" disabled={submitting} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"><Send className="mr-2 h-4 w-4" />{submitting ? "Menyimpan..." : "Kirim Dokumen"}</button>
                             </div>
                         </div>
 
                         <div className="min-w-0 xl:col-span-6">
-                            <div className="sticky top-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm xl:sticky xl:top-24">
                                 <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
                                     <div className="text-sm font-semibold text-gray-950">Preview</div>
                                     <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">PDF</span>
@@ -346,26 +275,18 @@ function TargetPicker({ title, draft, setDraft, targets, field, targetOptions, o
     );
 }
 
-function SignatureRequestPanel({ requests, signerOptions, onAddParaf, onUpdate, onRemove, onMove, placementActive, setPlacementActive, pdfReady, errors }) {
+function SignatureRequestPanel({ requests, signerOptions, onUpdate, onRemove, onMove, placementActive, setPlacementActive, pdfReady, errors }) {
     return (
         <Card>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                    <h2 className="text-sm font-semibold text-gray-950">Paraf dan Tanda Tangan</h2>
+                    <h2 className="text-sm font-semibold text-gray-950">Tanda Tangan</h2>
                     <p className="mt-1 text-xs leading-5 text-gray-500">
-                        Paraf diproses lebih dulu tanpa QR. Tanda tangan QR ditempatkan di PDF setelah semua paraf selesai.
+                        Pilih penanda tangan dan tempatkan QR pada PDF.
                     </p>
                 </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                    type="button"
-                    onClick={onAddParaf}
-                    className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-                >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Tambah paraf
-                </button>
                 <button
                     type="button"
                     disabled={!pdfReady}
@@ -376,7 +297,7 @@ function SignatureRequestPanel({ requests, signerOptions, onAddParaf, onUpdate, 
                             : "bg-emerald-700 text-white hover:bg-emerald-800"
                     }`}
                 >
-                    {placementActive ? "Batal tambah titik TTD" : "Tambah tanda tangan QR"}
+                    {placementActive ? "Batal tambah titik TTD" : "Tambah penanda tangan"}
                 </button>
             </div>
             {!pdfReady ? (
@@ -384,7 +305,7 @@ function SignatureRequestPanel({ requests, signerOptions, onAddParaf, onUpdate, 
             ) : placementActive ? (
                 <div className="mt-2 text-xs text-amber-700">Mode tambah TTD aktif. Klik satu posisi di preview PDF. Setelah titik dibuat, mode akan mati agar PDF bisa discroll lagi.</div>
             ) : (
-                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal. Paraf tidak membutuhkan posisi PDF.</div>
+                <div className="mt-2 text-xs text-gray-500">PDF bisa discroll normal.</div>
             )}
 
             {errors.signature_requests ? <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{errors.signature_requests}</div> : null}
@@ -392,13 +313,7 @@ function SignatureRequestPanel({ requests, signerOptions, onAddParaf, onUpdate, 
             <div className="mt-4 space-y-3">
                 {requests.length ? requests.map((request, index) => (
                     <div key={request.local_id} className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-                        <div className="grid gap-3 md:grid-cols-[110px_90px_1fr_110px_auto] md:items-end">
-                            <div className="text-xs font-semibold text-gray-600">
-                                Jenis
-                                <div className={`mt-1 rounded-lg border px-3 py-2 text-sm font-medium ${request.approval_type === "paraf" ? "border-blue-100 bg-blue-50 text-blue-700" : "border-emerald-100 bg-emerald-50 text-emerald-700"}`}>
-                                    {request.approval_type === "paraf" ? "Paraf" : "Tanda Tangan"}
-                                </div>
-                            </div>
+                        <div className="grid gap-3 md:grid-cols-[90px_1fr_110px_auto] md:items-end">
                             <label className="text-xs font-semibold text-gray-600">
                                 Urutan
                                 <select value={request.signing_order} onChange={(event) => onMove(request.local_id, event.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">
@@ -415,21 +330,19 @@ function SignatureRequestPanel({ requests, signerOptions, onAddParaf, onUpdate, 
                             <div className="text-xs font-semibold text-gray-600">
                                 Halaman
                                 <div className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800">
-                                    {request.approval_type === "paraf" ? "-" : request.page_number}
+                                    {request.page_number}
                                 </div>
                             </div>
                             <button type="button" onClick={() => onRemove(request.local_id)} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Hapus</button>
                         </div>
                         <div className="mt-2 text-xs text-gray-500">
-                            {request.approval_type === "paraf"
-                                ? "Paraf hanya approval sistem dan tidak ditempel ke PDF."
-                                : `Posisi: ${(request.x * 100).toFixed(1)}%, ${(request.y * 100).toFixed(1)}% · Ukuran: ${(request.width * 100).toFixed(1)}% x ${(request.height * 100).toFixed(1)}%`}
+                            {`Posisi: ${(request.x * 100).toFixed(1)}%, ${(request.y * 100).toFixed(1)}% · Ukuran: ${(request.width * 100).toFixed(1)}% x ${(request.height * 100).toFixed(1)}%`}
                         </div>
                         {errors[`signature_requests.${index}.signer_user_id`] ? <div className="mt-2 text-xs text-red-600">{errors[`signature_requests.${index}.signer_user_id`]}</div> : null}
                     </div>
                 )) : (
                     <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                        Belum ada paraf atau tanda tangan. Tambahkan paraf, atau upload PDF lalu klik area preview untuk menambah tanda tangan QR.
+                        Belum ada penanda tangan. Upload PDF lalu klik area preview untuk menambah tanda tangan QR.
                     </div>
                 )}
             </div>

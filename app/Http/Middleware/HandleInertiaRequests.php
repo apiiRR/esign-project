@@ -50,12 +50,15 @@ class HandleInertiaRequests extends Middleware
                 'app_name' => 'Surat dan Arsip Digital Berdikari',
                 'company_name' => 'PT Berdikari',
                 'company_logo' => null,
+                'login_logo' => null,
             ])
             : [
                 'app_name' => 'Surat dan Arsip Digital Berdikari',
                 'company_name' => 'PT Berdikari',
                 'company_logo' => null,
+                'login_logo' => null,
             ];
+        $settings['document_download_otp_scope'] ??= 'both';
 
         return [
             ...parent::share($request),

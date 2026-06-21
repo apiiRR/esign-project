@@ -16,12 +16,8 @@ class LetterFieldRequirementService
             'notes' => 'Catatan',
         ],
         'internal' => [
-            'letter_type_id' => 'Jenis Surat',
             'subject' => 'Perihal',
             'scan_file' => 'File Scan PDF',
-            'internal_origin' => 'Asal Surat',
-            'targets' => 'Tujuan',
-            'cc_targets' => 'Tembusan',
             'letter_number' => 'Nomor Surat',
         ],
         'outgoing' => [
@@ -53,12 +49,8 @@ class LetterFieldRequirementService
                 'notes' => false,
             ],
             'internal' => [
-                'letter_type_id' => true,
                 'subject' => true,
                 'scan_file' => true,
-                'internal_origin' => true,
-                'targets' => true,
-                'cc_targets' => false,
                 'letter_number' => false,
             ],
             'outgoing' => [

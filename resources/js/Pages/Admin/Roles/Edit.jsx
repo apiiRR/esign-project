@@ -10,6 +10,7 @@ import { Save } from "lucide-react";
 
 // import component PageHeader
 import PageHeader from "@/Shared/PageHeader";
+import PermissionChecklist, { groupPermissions } from "./PermissionChecklist";
 
 export default function RolesEdit() {
 
@@ -23,17 +24,7 @@ export default function RolesEdit() {
     });
 
     // group permission berdasarkan prefix (roles.*, users.*, dll)
-    const groupedPermissions = permissions.reduce((groups, permission) => {
-        const [group] = permission.name.split('.');
-        const groupName = group.charAt(0).toUpperCase() + group.slice(1);
-
-        if (!groups[groupName]) {
-            groups[groupName] = [];
-        }
-
-        groups[groupName].push(permission);
-        return groups;
-    }, {});
+    const groupedPermissions = groupPermissions(permissions);
 
     // fungsi togglePermission
     const togglePermission = (id) => {
@@ -80,11 +71,11 @@ export default function RolesEdit() {
                                 <input
                                     type="text"
                                     value={data.name}
-                                    readOnly
+                                    onChange={(e) => setData('name', e.target.value)}
                                     className={`w-full px-4 py-2 border rounded-lg bg-gray-50 text-gray-600 ${errors.name ? 'border-red-500' : 'border-gray-300'}`}
                                 />
                                 <p className="mt-1 text-xs text-gray-500">
-                                    Nama role tidak dapat diubah; jabatan kerja diatur pada data user.
+                                    Gunakan huruf, angka, titik, underscore, atau strip.
                                 </p>
                                 {errors.name && (
                                     <p className="mt-1 text-sm text-red-600">
@@ -99,37 +90,11 @@ export default function RolesEdit() {
                                     Permissions
                                 </label>
 
-                                {/* GRID GROUP */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    {Object.keys(groupedPermissions).map(group => (
-                                        <div
-                                            key={group}
-                                            className="border border-gray-200 rounded-xl p-4 bg-gray-50"
-                                        >
-                                            <h4 className="text-sm font-semibold text-gray-800 mb-3">
-                                                {group}
-                                            </h4>
-
-                                            {/* CHECKBOX GRID */}
-                                            <div className="grid grid-cols-1 gap-2">
-                                                {groupedPermissions[group].map(permission => (
-                                                    <label
-                                                        key={permission.id}
-                                                        className="flex items-center space-x-2 text-sm text-gray-700"
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={data.permissions.includes(permission.id)}
-                                                            onChange={() => togglePermission(permission.id)}
-                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                        />
-                                                        <span>{permission.name}</span>
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                <PermissionChecklist
+                                    groupedPermissions={groupedPermissions}
+                                    selectedPermissions={data.permissions}
+                                    onToggle={togglePermission}
+                                />
 
                                 {errors.permissions && (
                                     <p className="mt-2 text-sm text-red-600">

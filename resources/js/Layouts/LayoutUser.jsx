@@ -13,6 +13,8 @@ export default function LayoutUser({ children }) {
     const user = props.auth?.user;
     const settings = props.settings || {};
     const [profileOpen, setProfileOpen] = useState(false);
+    const userName = user?.name || "User";
+    const userPosition = user?.position || "-";
 
     return (
         <div className="min-h-screen bg-gray-100">
@@ -40,8 +42,8 @@ export default function LayoutUser({ children }) {
 
                     <div className="flex items-center gap-3">
                         <div className="hidden text-right sm:block">
-                            <div className="text-sm font-semibold text-gray-950">{user?.name || "User"}</div>
-                            <div className="text-xs text-gray-500">{user?.department?.name || user?.position || companyName(settings)}</div>
+                            <div className="text-sm font-semibold text-gray-950">{userName}</div>
+                            <div className="text-xs text-gray-500">{userPosition}</div>
                         </div>
                         <div className="relative">
                             <button
@@ -55,8 +57,8 @@ export default function LayoutUser({ children }) {
                             {profileOpen ? (
                                 <div className="absolute right-0 z-50 mt-3 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
                                     <div className="border-b border-gray-100 px-4 py-3">
-                                        <div className="truncate text-sm font-semibold text-gray-950">{user?.name || "User"}</div>
-                                        <div className="truncate text-xs text-gray-500">{user?.email || user?.username || companyName(settings)}</div>
+                                        <div className="truncate text-sm font-semibold text-gray-950">{userName}</div>
+                                        <div className="truncate text-xs text-gray-500">{userPosition}</div>
                                     </div>
                                     <Link href="/logout" method="post" as="button" className="flex w-full items-center px-4 py-3 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-700">
                                         <LogOut className="mr-3 h-4 w-4 text-gray-400" />

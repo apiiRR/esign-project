@@ -113,6 +113,47 @@ function locationHeaders() {
     });
 }
 
+function currentCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || "";
+}
+
+function updateCsrfToken(token) {
+    let meta = document.querySelector('meta[name="csrf-token"]');
+
+    if (!meta) {
+        meta = document.createElement("meta");
+        meta.setAttribute("name", "csrf-token");
+        document.head.appendChild(meta);
+    }
+
+    meta.setAttribute("content", token);
+
+    if (window.axios?.defaults?.headers?.common) {
+        window.axios.defaults.headers.common["X-CSRF-TOKEN"] = token;
+    }
+}
+
+async function freshCsrfToken() {
+    const response = await fetch("/csrf-token", {
+        method: "GET",
+        credentials: "same-origin",
+        headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            Accept: "application/json",
+        },
+    });
+    const payload = await response.json().catch(() => ({}));
+    const token = payload.token || currentCsrfToken();
+
+    if (!response.ok || !token) {
+        throw new Error("Token keamanan tidak tersedia. Muat ulang halaman lalu coba lagi.");
+    }
+
+    updateCsrfToken(token);
+
+    return token;
+}
+
 function letterDisplayNumber(letter) {
     if (!letter) return "-";
     if (letter.type === "incoming_external") return letter.letter_number || "-";
@@ -904,7 +945,7 @@ function CreatePage() {
         setData("signature_requests", normalizeSignatureRequests(reordered));
     }
 
-    function submit(e, action = "send") {
+    async function submit(e, action = "send") {
         e.preventDefault();
         setClientErrors([]);
         if (isInternal && action === "send") {
@@ -924,18 +965,54 @@ function CreatePage() {
             }
         }
         setSubmitting(true);
+        let csrfToken = "";
+
+        try {
+            csrfToken = await freshCsrfToken();
+        } catch (error) {
+            const message = error?.message || "Token keamanan tidak tersedia. Muat ulang halaman lalu coba lagi.";
+            setClientErrors([message]);
+            window.alert(message);
+            setSubmitting(false);
+            return;
+        }
+
         router.post(pageConfig.submitUrl, { ...data, submit_action: action }, {
             forceFormData: true,
             preserveScroll: true,
+            headers: {
+                "X-CSRF-TOKEN": csrfToken,
+            },
             onError: (validationErrors) => {
                 const messages = Object.values(validationErrors || {}).flat().filter(Boolean);
                 const message = messages[0] || "Form gagal disimpan. Periksa kembali input yang wajib diisi.";
+                setClientErrors([message]);
                 window.alert(message);
             },
-            onSuccess: () => {
-                reset();
-                if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-                setPdfPreviewUrl("");
+            onSuccess: (page) => {
+                const nextUrl = page?.url || "";
+                const isDetailPage = /^\/user\/surat\/\d+/.test(nextUrl);
+
+                if (isDetailPage) {
+                    reset();
+                    if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+                    setPdfPreviewUrl("");
+                }
+            },
+            onCancel: () => {
+                setClientErrors(["Pengiriman dokumen dibatalkan."]);
+            },
+            onException: (event) => {
+                const status = event?.detail?.response?.status;
+                const message = status === 419
+                    ? "Sesi atau token keamanan kedaluwarsa. Muat ulang halaman lalu coba lagi."
+                    : status === 403
+                      ? "Akses membuat dokumen ditolak. Pastikan akun Anda diberi izin membuat dokumen."
+                      : "Terjadi gangguan server saat menyimpan dokumen. Data belum disimpan.";
+
+                setClientErrors([message]);
+                window.alert(message);
+                event?.preventDefault?.();
             },
             onFinish: () => setSubmitting(false),
         });

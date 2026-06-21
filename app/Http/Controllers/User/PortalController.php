@@ -29,7 +29,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
+use Throwable;
 
 class PortalController extends Controller
 {
@@ -56,7 +57,10 @@ class PortalController extends Controller
         }
 
         if ($section === 'create') {
-            abort_unless($this->canCreateDocuments($user), 403);
+            if (! $this->canCreateDocuments($user)) {
+                $this->logCreateDocumentDenied($request);
+                abort(403, 'Akun Anda belum diberi akses untuk membuat dokumen.');
+            }
         }
 
         if ($section === 'inbox' && $mode === 'tebusan') {
@@ -395,15 +399,31 @@ class PortalController extends Controller
 
     public function storeInternal(Request $request)
     {
-        $letter = $this->storeLetter($request, 'internal');
-        app(AuditTrailService::class)->log($request, $request->user(), 'dokumen', 'created', 'Membuat dokumen dari portal user.', $letter, [
-            'status' => $letter->status,
-            'signature_flow' => data_get($letter->meta, 'signature_flow'),
-        ]);
+        try {
+            $letter = $this->storeLetter($request, 'internal');
+            app(AuditTrailService::class)->log($request, $request->user(), 'dokumen', 'created', 'Membuat dokumen dari portal user.', $letter, [
+                'status' => $letter->status,
+                'signature_flow' => data_get($letter->meta, 'signature_flow'),
+            ]);
 
-        return redirect()
-            ->route('user.surat.detail', $letter)
-            ->with('success', $letter->status === 'draft' ? 'Draft dokumen berhasil disimpan.' : 'Dokumen berhasil dikirim.');
+            return redirect()
+                ->route('user.surat.detail', $letter)
+                ->with('success', $letter->status === 'draft' ? 'Draft dokumen berhasil disimpan.' : 'Dokumen berhasil dikirim.');
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            Log::error('Gagal menyimpan dokumen dari portal user.', [
+                'user_id' => $request->user()?->id,
+                'exception' => $exception->getMessage(),
+                'exception_class' => $exception::class,
+            ]);
+
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'document' => 'Dokumen gagal disimpan karena terjadi gangguan server. Coba lagi atau hubungi admin.',
+                ]);
+        }
     }
 
     public function storeOutgoing(Request $request)
@@ -813,20 +833,21 @@ class PortalController extends Controller
 
     private function canCreateDocuments(User $user): bool
     {
-        $createPermissions = ['user.letters.create'];
+        $permission = Permission::where('name', 'user.letters.create')->first();
 
-        if ($user->hasAnyPermission($createPermissions)) {
-            return true;
-        }
+        return $permission ? $user->hasDirectPermission($permission) : false;
+    }
 
-        if (! $user->role) {
-            return false;
-        }
-
-        return Role::query()
-            ->where('name', $user->role)
-            ->whereHas('permissions', fn (Builder $query) => $query->whereIn('name', $createPermissions))
-            ->exists();
+    private function logCreateDocumentDenied(Request $request): void
+    {
+        Log::warning('Akses buat dokumen user ditolak.', [
+            'user_id' => $request->user()?->id,
+            'username' => $request->user()?->username,
+            'role' => $request->user()?->role,
+            'path' => $request->path(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+        ]);
     }
 
     private function isCompleteSignatureRequest(array $request): bool
@@ -847,7 +868,13 @@ class PortalController extends Controller
         $requirements = app(LetterFieldRequirementService::class);
         $isSending = $request->input('submit_action') === 'send';
 
-        abort_unless($this->canCreateDocuments($user), 403);
+        if (! $this->canCreateDocuments($user)) {
+            $this->logCreateDocumentDenied($request);
+
+            throw ValidationException::withMessages([
+                'permission' => 'Akun Anda belum diberi akses untuk membuat dokumen.',
+            ]);
+        }
 
         try {
             $validated = $request->validate([

@@ -79,8 +79,8 @@ Route::prefix('admin')->name('admin.')->group(function() {
             ->name('surat.create');
         Route::post('/surat', [App\Http\Controllers\Admin\LetterController::class, 'store'])
             ->name('surat.store');
-        Route::delete('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'destroyDraft'])
-            ->name('surat.destroy-draft');
+        Route::delete('/surat/{letter}', [App\Http\Controllers\Admin\LetterController::class, 'destroy'])
+            ->name('surat.destroy');
         Route::post('/surat/{letter}/revisi-pdf', [App\Http\Controllers\Admin\LetterController::class, 'reviseInternalPdf'])
             ->name('surat.revisi-pdf');
         Route::get('/surat/{letter}/preview', [App\Http\Controllers\Admin\LetterController::class, 'preview'])

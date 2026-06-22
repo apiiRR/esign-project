@@ -338,20 +338,85 @@ class LetterController extends Controller
         return back()->with('success', 'PDF revisi versi ' . $version->version_number . ' berhasil diunggah dan workflow approval dimulai ulang.');
     }
 
-    public function destroyDraft(Request $request, Letter $letter)
+    public function destroy(Request $request, Letter $letter)
     {
-        abort_unless((int) $letter->created_by === (int) $request->user()->id, 403);
-        abort_unless($letter->status === 'draft', 403);
+        $letter->loadMissing([
+            'creator:id,name,email,username',
+            'attachments:id,letter_id,file_path',
+            'documentVersions:id,letter_id,source_pdf_path,signed_pdf_path',
+            'signatureRequests:id,letter_id,qr_file_path,signature_image_path',
+        ]);
 
-        DB::transaction(function () use ($letter) {
-            $letter->load('attachments');
-            foreach ($letter->attachments as $attachment) {
-                Storage::disk('public')->delete($attachment->file_path);
+        $filePaths = $this->documentFilePaths($letter);
+
+        DB::transaction(function () use ($request, $letter, $filePaths) {
+            app(AuditTrailService::class)->log($request, $request->user(), 'dokumen', 'deleted', 'Menghapus dokumen.', $letter, [
+                'document_id' => $letter->id,
+                'document_number' => $letter->letter_number ?: '-',
+                'subject' => $letter->subject,
+                'creator' => [
+                    'id' => $letter->creator?->id,
+                    'name' => $letter->creator?->name,
+                    'email' => $letter->creator?->email,
+                    'username' => $letter->creator?->username,
+                ],
+                'last_status' => $letter->status,
+                'signature_status' => $letter->signature_status,
+                'signer_count' => $letter->signatureRequests->count(),
+                'file_paths' => $filePaths->values()->all(),
+            ]);
+
+            if ($letter->current_version_id) {
+                $letter->forceFill(['current_version_id' => null])->saveQuietly();
             }
+
             $letter->delete();
         });
 
-        return redirect()->route('admin.surat.internal')->with('success', 'Draft dokumen berhasil dihapus.');
+        $this->deleteDocumentFiles($filePaths, $letter->id);
+
+        return redirect()->route('admin.surat.internal')->with('success', 'Dokumen berhasil dihapus.');
+    }
+
+    private function documentFilePaths(Letter $letter): Collection
+    {
+        return collect()
+            ->merge($letter->attachments->pluck('file_path'))
+            ->merge($letter->documentVersions->pluck('source_pdf_path'))
+            ->merge($letter->documentVersions->pluck('signed_pdf_path'))
+            ->push($letter->signed_pdf_path)
+            ->merge($letter->signatureRequests->pluck('qr_file_path'))
+            ->merge($letter->signatureRequests->pluck('signature_image_path')->reject(
+                fn ($path) => is_string($path) && Str::startsWith($path, 'signatures/specimens/')
+            ))
+            ->filter(fn ($path) => is_string($path) && trim($path) !== '')
+            ->map(fn (string $path) => trim($path))
+            ->unique()
+            ->values();
+    }
+
+    private function deleteDocumentFiles(Collection $filePaths, int $letterId): void
+    {
+        $filePaths->each(function (string $path) use ($letterId) {
+            try {
+                if (! Storage::disk('public')->exists($path)) {
+                    return;
+                }
+
+                if (! Storage::disk('public')->delete($path)) {
+                    Log::warning('File dokumen gagal dihapus saat delete dokumen admin.', [
+                        'letter_id' => $letterId,
+                        'path' => $path,
+                    ]);
+                }
+            } catch (\Throwable $exception) {
+                Log::warning('Exception saat menghapus file dokumen admin.', [
+                    'letter_id' => $letterId,
+                    'path' => $path,
+                    'exception' => $exception->getMessage(),
+                ]);
+            }
+        });
     }
 
     private function mapType(string $type): string

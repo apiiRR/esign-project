@@ -59,9 +59,8 @@ function locationLabel(request) {
 }
 
 export default function LetterShow() {
-    const { letter, auth, hasPreview = false, previewUrl, downloadOtpRequired = true } = usePage().props;
+    const { letter, hasPreview = false, previewUrl, downloadOtpRequired = true } = usePage().props;
     const isInternal = letter.type === "internal";
-    const canDeleteDraft = letter.status === "draft" && String(letter.created_by) === String(auth?.user?.id);
     const downloadFileName = `${letter.letter_number || "dokumen"}.pdf`;
 
     return (
@@ -78,20 +77,22 @@ export default function LetterShow() {
                             </div>
                             <p className="mt-2 text-sm text-gray-500">{letter.letter_number || "-"} · Dokumen</p>
                         </div>
-                        {canDeleteDraft ? (
-                            <div className="flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (confirm("Hapus draft dokumen ini?")) router.delete(`/admin/surat/${letter.id}`);
-                                    }}
-                                    className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto"
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Hapus Draft
-                                </button>
-                            </div>
-                        ) : null}
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const confirmed = confirm("Dokumen, approval, OTP, dan file PDF/QR di storage akan dihapus permanen. Aksi ini akan tercatat di audit trail. Lanjutkan?");
+
+                                    if (confirmed) {
+                                        router.delete(`/admin/surat/${letter.id}`);
+                                    }
+                                }}
+                                className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 sm:w-auto"
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Hapus Dokumen
+                            </button>
+                        </div>
                         {hasPreview ? (
                             <>
                                 <Panel title="Preview Surat">

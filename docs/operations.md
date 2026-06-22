@@ -63,6 +63,95 @@ Reset database lokal:
 php artisan migrate:fresh --seed
 ```
 
+## Clear Data Dokumen Saja di Production
+
+Gunakan langkah ini jika ingin menghapus seluruh data dokumen/surat hasil testing, tetapi tetap mempertahankan user, role, settings, logo, SMTP, dan konfigurasi aplikasi.
+
+Peringatan: langkah ini permanen untuk data dokumen. Lakukan backup dulu sebelum menjalankan perintah delete/truncate.
+
+### 1. Backup Database
+
+Sesuaikan `DB_USERNAME` dan `DB_DATABASE` dengan nilai di `.env.production`.
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec postgres pg_dump -U surat_user surat_digital > backup-before-clear-documents.sql
+```
+
+Jika Docker perlu `sudo`:
+
+```bash
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec postgres pg_dump -U surat_user surat_digital > backup-before-clear-documents.sql
+```
+
+### 2. Cek Jumlah Dokumen
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan tinker --execute="dump(DB::table('letters')->count());"
+```
+
+### 3. Hapus Data Dokumen dari Database
+
+Perintah ini menghapus data dari `letters` dan otomatis cascade ke tabel anak seperti target, attachment, disposisi, read receipt, signature request, versi dokumen, OTP tanda tangan, OTP download, dan notification log dokumen.
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan tinker --execute="DB::transaction(function () { DB::statement('TRUNCATE TABLE letters RESTART IDENTITY CASCADE'); if (Schema::hasTable('audit_trails')) { DB::table('audit_trails')->where('auditable_type', App\\Models\\Letter::class)->orWhereIn('category', ['dokumen', 'tanda_tangan'])->delete(); } });"
+```
+
+Dengan `sudo`:
+
+```bash
+sudo docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan tinker --execute="DB::transaction(function () { DB::statement('TRUNCATE TABLE letters RESTART IDENTITY CASCADE'); if (Schema::hasTable('audit_trails')) { DB::table('audit_trails')->where('auditable_type', App\\Models\\Letter::class)->orWhereIn('category', ['dokumen', 'tanda_tangan'])->delete(); } });"
+```
+
+### 4. Hapus File Dokumen dari Storage
+
+Masuk ke container app:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app sh
+```
+
+Lalu hapus hanya folder file dokumen:
+
+```bash
+rm -rf storage/app/public/letters
+rm -rf storage/app/public/surat
+rm -rf storage/app/public/signatures/qr
+rm -rf storage/app/public/signatures/signed
+rm -rf storage/app/private/tmp/downloads
+mkdir -p storage/app/public/letters storage/app/public/surat storage/app/public/signatures/qr storage/app/public/signatures/signed storage/app/private/tmp/downloads
+exit
+```
+
+Jangan hapus folder berikut jika masih ingin mempertahankan konfigurasi dan spesimen user:
+
+```text
+storage/app/public/settings
+storage/app/public/signatures/specimens
+```
+
+### 5. Clear Cache dan Restart Queue
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan optimize:clear
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan queue:restart
+docker compose --env-file .env.production -f docker-compose.prod.yml restart app queue scheduler nginx
+```
+
+### 6. Verifikasi
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec app php artisan tinker --execute="dump(DB::table('letters')->count(), DB::table('letter_attachments')->count(), DB::table('letter_signature_requests')->count());"
+```
+
+Hasil yang diharapkan:
+
+```text
+0
+0
+0
+```
+
 ## Storage File Surat
 
 Lampiran PDF disimpan di disk public:
